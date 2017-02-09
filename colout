@@ -1,0 +1,282 @@
+#!/bin/bash
+
+usage() {
+echo -e \
+"$0 -l [--] [COLORS_AND_STYLES...]\n"\
+"$0 [-rg] [--] PATTERN [COLORS_AND_STYLES...] [-- [-rg] [--] PATTERN [COLORS_AND_STYLES...]]...\n\n"\
+" -l\n  Colors the lines\n\n"\
+" -r\n  Apply the regex on the line until it is no longer able to\n\n"\
+" -g\n  Color each match to a different color. Implies -r\n\n"\
+" styles:\n"\
+  "  normal,N\n"\
+  "  bold,B\n"\
+  "  d[im]\n"\
+  "  i[talic]\n"\
+  "  u[nderline]\n"\
+  "  blink,K\n"\
+  "  reverse,R\n"\
+  "  [h]idden\n\n"\
+" named colors:\n"\
+  "  default,none\n"\
+  "  [blac]k\n"\
+  "  w[hite]\n"\
+  "  r[ed]\n"\
+  "  g[reen]\n"\
+  "  b[lue]\n"\
+  "  y[ellow]\n"\
+  "  m[agenta]\n"\
+  "  c[yan]\n"\
+  "  gray,a\n"\
+  "  d[ark_]gray,da\n"\
+  "  l[ight_]red,lr\n"\
+  "  l[ight_]green,lg\n"\
+  "  l[ight_]blue,lb\n"\
+  "  l[ight_]yellow,ly\n"\
+  "  l[ight_]magenta,lm\n"\
+  "  l[ight_]cyan,lc\n\n"\
+" rgb color:\n  {0..255},{0..255},{0..255}\n  Hexadecimal triplet (cf '#22fa44' or '#ae3')\n\n"\
+" ASCII color:\n  a{0..255}\n\n"\
+" prefix color selector:\n  fg=\n  bg=  bg\n\n"\
+" example:\n  $0 '(..)..(..)' red,bg=123,16,222,italic bgyellow <<<abcdefgh"\
+>&2
+}
+
+
+line_mode=0
+repeat_rgx_mode=0
+loop_mode=0
+
+while getopts 'hlrg' optname
+do
+  case "$optname" in
+    l)
+      pattern=''
+      line_mode=1
+      append(){
+        [ ! -z "$pattern" ] && pattern+=';n;'
+        pattern+="s/^/${start}0${1}m/;s/$/${start}0m/"
+      }
+      run(){ sed "$pattern" ; }
+      ;;
+    r) repeat_rgx_mode=1 ;;
+    g) loop_mode=1 ;;
+    \?) break ;;
+    h) usage ; exit 1 ;;
+  esac
+done
+
+shift $(($OPTIND-1))
+
+if [ $# = 0 ] && [ $line_mode = 0 ] ; then
+  usage
+  exit 1
+fi
+
+[ $loop_mode = 1 ] && repeat_rgx_mode=1
+
+if [ $line_mode = 0 ] ; then
+  rgx="$1"
+  shift
+  icol=0
+  ireg=0
+  colors=''
+  append(){
+    colors+="colors$ireg[$icol]=\"$1\";"
+    ((++icol))
+  }
+
+  awk_code=''
+  awk_begin_code=''
+  mk_rgv_block() {
+    rgx=${rgx//\//\\/}
+
+    rep_start=''
+    rep_stop=''
+    if [ $repeat_rgx_mode = 1 ] ; then
+      rep_start='do {'
+      rep_stop='$0 = substr($0, RLENGTH+1) } while (match($0, /'"$rgx"'/, a))'
+    fi
+
+    [ $loop_mode = 1 ] &&
+      awk_i_color='icol++' ||
+      awk_i_color='(i-1)'
+
+    awk_begin_code+="$colors"' nb_colors'$ireg'='$icol';'
+    awk_code+='
+    if (match($0, /'"$rgx"'/, a)) {
+      s = ""
+      '"$rep_start"'
+      n = length(a)/3
+      if (n == 1) {
+        s = s "\x1B[" colors'$ireg'['"$awk_i_color"'%nb_colors'$ireg'] "m" a[0] "\x1B[0m"
+      }
+      else {
+        c = ""
+        p = 1
+        for (i=1; i<n; ++i) {
+          start=a[i,"start"]
+          if (start == null) {
+            ++n;
+            continue
+          }
+          s = s substr($0, p, start-p) "\x1B[" colors'$ireg'['"$awk_i_color"'%nb_colors'$ireg'] "m" a[i] "\x1B[0m"
+          p = start+a[i,"length"]
+        }
+      }
+      '"$rep_stop"'
+      print s substr($0, RLENGTH+1)
+    } else '
+    ((++ireg))
+    icol=0
+  }
+
+  run() {
+    mk_rgv_block
+    awk 'BEGIN { '"$awk_begin_code"' } { '"$awk_code"' print $0 }'
+  }
+fi
+
+
+declare -A style_names=(
+  # styles
+
+  [fgnormal]=0 [fgbold]=1 [fgdim]=2 [fgitalic]=3 [fgunderline]=4 [fgblink]=5 [fgreverse]=7 [fghidden]=8
+  [fgN]=0 [fgB]=1 [fgd]=2 [fgi]=3 [fgu]=4 [fgK]=5 [fgR]=7 [fgh]=8
+
+  [bgnormal]=0 [bgbold]=1 [bgdim]=2 [bgitalic]=3 [bgunderline]=4 [bgblink]=5 [bgreverse]=7 [bghidden]=8
+  [bgN]=0 [bgB]=1 [bgd]=2 [bgi]=3 [bgu]=4 [bgK]=5 [bgR]=7 [bgh]=8
+
+
+  # foreground
+
+  [fgdefault]=39 [fgnone]=39
+
+  [fgblack]=30 [fgred]=31 [fggreen]=32 [fgyellow]=33 [fgblue]=34 [fgmagenta]=35 [fgcyan]=36 [fggray]=37
+  [fgk]=30 [fgr]=31 [fgg]=32 [fgy]=33 [fgb]=34 [fgm]=35 [fgc]=36 [fga]=37
+
+  [fgdark_gray]=90 [fglight_red]=91 [fglight_green]=92 [fglight_yellow]=93 [fglight_blue]=94 [fglight_magenta]=95 [fglight_cyan]=96 [fgwhite]=97
+  [fgdgray]=90 [fglred]=91 [fglgreen]=92 [fglyellow]=93 [fglblue]=94 [fglmagenta]=95 [fglcyan]=96
+  [fgda]=90 [fglr]=91 [fglg]=92 [fgly]=93 [fglb]=94 [fglm]=95 [fglc]=96 [fgw]=97
+
+  [fgbgdefault]=39 [fgbgnone]=39
+
+  [fgbgblack]=30 [fgbgred]=31 [fgbggreen]=32 [fgbgyellow]=33 [fgbgblue]=34 [fgbgmagenta]=35 [fgbgcyan]=36 [fgbggray]=37
+  [fgbgk]=30 [fgbgr]=31 [fgbgg]=32 [fgbgy]=33 [fgbgb]=34 [fgbgm]=35 [fgbgc]=36 [fgbga]=37
+
+  [fgbgdark_gray]=90 [fgbglight_red]=91 [fgbglight_green]=92 [fgbglight_yellow]=93 [fgbglight_blue]=94 [fgbglight_magenta]=95 [fgbglight_cyan]=96 [fgbgwhite]=97
+  [fgbgdgray]=90 [fgbglred]=91 [fgbglgreen]=92 [fgbglyellow]=93 [fgbglblue]=94 [fgbglmagenta]=95 [fgbglcyan]=96
+  [fgbgda]=90 [fgbglr]=91 [fgbglg]=92 [fgbgly]=93 [fgbglb]=94 [fgbglm]=95 [fgbglc]=96 [fgbgw]=97
+
+
+  # background
+
+  [bgdefault]=49 [bgnone]=49
+
+  [bgblack]=40 [bgred]=41 [bggreen]=42 [bgyellow]=43 [bgblue]=44 [bgmagenta]=45 [bgcyan]=46 [bggray]=47
+  [bgk]=40 [bgr]=41 [bgg]=42 [bgy]=43 [bgb]=44 [bgm]=45 [bgc]=46 [bga]=47
+
+  [bgdgray]=100 [bglred]=101 [bglgreen]=102 [bglyellow]=103 [bglblue]=104 [bglmagenta]=105 [bglcyan]=106 [bgwhite]=107
+  [bgdark_gray]=100 [bglight_red]=101 [bglight_green]=102 [bglight_yellow]=103 [bglight_blue]=104 [bglight_magenta]=105 [bglight_cyan]=106 [bgwhite]=107
+  [bgda]=100 [bglr]=101 [bglg]=102 [bgly]=103 [bglb]=104 [bglm]=105 [bglc]=106 [bgw]=107
+
+  [bgbgdefault]=49 [bgbgnone]=49
+
+  [bgbgblack]=40 [bgbgred]=41 [bgbggreen]=42 [bgbgyellow]=43 [bgbgblue]=44 [bgbgmagenta]=45 [bgbgcyan]=46 [bgbggray]=47
+  [bgbgk]=40 [bgbgr]=41 [bgbgg]=42 [bgbgy]=43 [bgbgb]=44 [bgbgm]=45 [bgbgc]=46 [bgbga]=47
+
+  [bgbgdgray]=100 [bgbglred]=101 [bgbglgreen]=102 [bgbglyellow]=103 [bgbglblue]=104 [bgbglmagenta]=105 [bgbglcyan]=106 [bgbgwhite]=107
+  [bgbgdark_gray]=100 [bgbglight_red]=101 [bgbglight_green]=102 [bgbglight_yellow]=103 [bgbglight_blue]=104 [bgbglight_magenta]=105 [bgbglight_cyan]=106 [bgbgwhite]=107
+  [bgbgda]=100 [bgbglr]=101 [bgbglg]=102 [bgbgly]=103 [bgbglb]=104 [bgbglm]=105 [bgbglc]=106 [bgbgw]=107
+)
+
+set_default_colors() {
+  append ';1;31'
+  append ';1;32'
+  append ';1;33'
+  append ';1;34'
+  append ';1;35'
+  append ';1;36'
+  append ';1;37'
+}
+
+start="$(echo -e "\e")["
+cmd='38;2;'
+prefix='fg'
+
+if [ $# = 0 ] ; then
+  set_default_colors
+else
+  while [ $# != 0 ] ; do
+    if [ "$1" = '--' ] ; then
+      if [ $line_mode = 1 ] ; then
+        usage
+        exit 5
+      fi
+      shift
+      mk_rgv_block
+
+      OPTIND=1
+      loop_mode=0;
+      while getopts 'hrg' optname
+      do
+        case "$optname" in
+          r) ;;
+          g) loop_mode=1 ;;
+          \?) break ;;
+          h) usage ; exit 1 ;;
+        esac
+      done
+
+      echo "$@"
+
+      shift $(($OPTIND-1))
+
+      if [ $# = 0 ] ; then
+        usage
+        exit 1
+      fi
+
+      rgx="$1"
+      shift
+      [ $# = 0 ] && set_default_colors
+
+      continue
+    fi
+
+    IFS=',=' read -a styles <<<"$1"
+    s=''
+    for style in "${styles[@]}" ; do
+      v=${style_names[$prefix$style]}
+      if [ -z "$v" ] ; then
+        if [ "$style" = fg ] ; then
+          cmd='38;2;'
+          prefix='fg'
+        elif [ "$style" = bg ] ; then
+          cmd='48;2;'
+          prefix='bg'
+        elif [[ "$style" =~ 'a'[0-9]+$ ]] ; then
+          s+=";${style:1}"
+        elif [[ "$style" =~ '#'[0-9a-fA-F]{6}$ ]] ; then
+          rgb=$((16#${style:1}))
+          s+=";$cmd$(($rgb>>16));$((($rgb>>8)&0xff));$(($rgb&0xff))"
+        elif [[ "$style" =~ '#'[0-9a-fA-F]{3}$ ]] ; then
+          rgb=$((16#${style:1}))
+          echo ";$((($rgb&0xf00)>>4));$(($rgb&0xf0));$((($rgb&0xf)<<4))"
+          s+=";$cmd$((($rgb&0xf00)>>4));$(($rgb&0xf0));$((($rgb&0xf)<<4))"
+        elif [[ "$style" =~ [0-9]+$ ]] ; then
+          s+=";$cmd$style"
+          cmd=''
+        else
+          echo "Invalid '$style' color." >&2
+          exit 5
+        fi
+      else
+        s+=";$v"
+      fi
+    done
+    append "$s"
+    shift
+  done
+fi
+
+run
