@@ -4,9 +4,9 @@ usage() {
 echo -e \
 "$0 -l [--] [COLORS_AND_STYLES...]\n"\
 "$0 [-rg] [--] PATTERN [COLORS_AND_STYLES...] [-- [-rg] [--] PATTERN [COLORS_AND_STYLES...]]...\n\n"\
-" -l\n  Colors the lines\n\n"\
-" -r\n  Apply the regex on the line until it is no longer able to\n\n"\
-" -g\n  Color each match to a different color. Implies -r\n\n"\
+" -l  Colors the lines\n\n"\
+" -r  Apply the regex on the line until it is no longer able to\n\n"\
+" -g  Color each match to a different color. Implies -r\n\n"\
 " styles:\n"\
   "  normal,N\n"\
   "  bold,B\n"\
@@ -34,10 +34,12 @@ echo -e \
   "  l[ight_]yellow,ly\n"\
   "  l[ight_]magenta,lm\n"\
   "  l[ight_]cyan,lc\n\n"\
-" rgb color:\n  {0..255},{0..255},{0..255}\n  Hexadecimal triplet (cf '#22fa44' or '#ae3')\n\n"\
-" ASCII color:\n  a{0..255}\n\n"\
-" prefix color selector:\n  fg=\n  bg=  bg\n\n"\
-" example:\n  $0 '(..)..(..)' red,bg=123,16,222,italic bgyellow <<<abcdefgh"\
+" rgb888 color:\n  Hexadecimal triplet: #[0-9a-fA-F]{6} (ex: '#22fa44')\n\n"\
+" rgb444 color:\n  Hexadecimal triplet: #[0-9a-fA-F]{3}, (ex: '#ae3')\n\n"\
+" 256 colors: {0..255}\n\n"\
+" ANSI/Escape color:\n  e{0..15}\n\n"\
+" background prefix:\n  bg=\n\n"\
+" example:\n  $0 '(..)..(..)' red,bg=#8f10e5,italic bg=yellow,k <<<abcdefgh"\
 >&2
 }
 
@@ -85,9 +87,9 @@ if [ $line_mode = 0 ] ; then
     ((++icol))
   }
 
-  awk_code=''
-  awk_begin_code=''
-  mk_rgv_block() {
+  awk_script=''
+  awk_begin_script=''
+  mk_rgx_block() {
     rgx=${rgx//\//\\/}
 
     rep_start=''
@@ -101,8 +103,8 @@ if [ $line_mode = 0 ] ; then
       awk_i_color='icol++' ||
       awk_i_color='(i-1)'
 
-    awk_begin_code+="$colors"' nb_colors'$ireg'='$icol';'
-    awk_code+='
+    awk_begin_script+="$colors"' nb_colors'$ireg'='$icol';'
+    awk_script+='
     if (match($0, /'"$rgx"'/, a)) {
       s = ""
       '"$rep_start"'
@@ -131,8 +133,8 @@ if [ $line_mode = 0 ] ; then
   }
 
   run() {
-    mk_rgv_block
-    awk 'BEGIN { '"$awk_begin_code"' } { '"$awk_code"' print $0 }'
+    mk_rgx_block
+    awk 'BEGIN { '"$awk_begin_script"' } { '"$awk_script"' print $0 }'
   }
 fi
 
@@ -167,6 +169,9 @@ declare -A style_names=(
   [fgbgdgray]=90 [fgbglred]=91 [fgbglgreen]=92 [fgbglyellow]=93 [fgbglblue]=94 [fgbglmagenta]=95 [fgbglcyan]=96
   [fgbgda]=90 [fgbglr]=91 [fgbglg]=92 [fgbgly]=93 [fgbglb]=94 [fgbglm]=95 [fgbglc]=96 [fgbgw]=97
 
+  [fge0]=30 [fge1]=31 [fge2]=32 [fge3]=33 [fge4]=34 [fge5]=35 [fge6]=36 [fge7]=37
+  [fge8]=90 [fge9]=91 [fge10]=92 [fge11]=93 [fge12]=94 [fge13]=95 [fge14]=96 [fge15]=97
+
 
   # background
 
@@ -187,6 +192,9 @@ declare -A style_names=(
   [bgbgdgray]=100 [bgbglred]=101 [bgbglgreen]=102 [bgbglyellow]=103 [bgbglblue]=104 [bgbglmagenta]=105 [bgbglcyan]=106 [bgbgwhite]=107
   [bgbgdark_gray]=100 [bgbglight_red]=101 [bgbglight_green]=102 [bgbglight_yellow]=103 [bgbglight_blue]=104 [bgbglight_magenta]=105 [bgbglight_cyan]=106 [bgbgwhite]=107
   [bgbgda]=100 [bgbglr]=101 [bgbglg]=102 [bgbgly]=103 [bgbglb]=104 [bgbglm]=105 [bgbglc]=106 [bgbgw]=107
+
+  [bge0]=40 [bge1]=41 [bge2]=42 [bge3]=43 [bge4]=44 [bge5]=45 [bge6]=46 [bge7]=47
+  [bge8]=100 [bge9]=101 [bge10]=102 [bge11]=103 [bge12]=104 [bge13]=105 [bge14]=106 [bge15]=107
 )
 
 set_default_colors() {
@@ -200,20 +208,21 @@ set_default_colors() {
 }
 
 start="$(echo -e "\e")["
-cmd='38;2;'
+cmd='38'
 prefix='fg'
 
 if [ $# = 0 ] ; then
   set_default_colors
 else
   while [ $# != 0 ] ; do
+    # re-parse: "-- [-rg] [--] PATTERN [COLORS_AND_STYLES...]]..."
     if [ "$1" = '--' ] ; then
       if [ $line_mode = 1 ] ; then
         usage
         exit 5
       fi
       shift
-      mk_rgv_block
+      mk_rgx_block
 
       OPTIND=1
       loop_mode=0;
@@ -243,35 +252,37 @@ else
       continue
     fi
 
+    # note: "bg,red" is equivalent to "bg=red"
+    # note: "bg,red blue" is equivalent to "bg=red bg=blue"
     IFS=',=' read -a styles <<<"$1"
     s=''
     for style in "${styles[@]}" ; do
       v=${style_names[$prefix$style]}
       if [ -z "$v" ] ; then
-        if [ "$style" = fg ] ; then
-          cmd='38;2;'
-          prefix='fg'
-        elif [ "$style" = bg ] ; then
-          cmd='48;2;'
+        # background selector
+        if [ bg = "$style" ] ; then
+          cmd='48'
           prefix='bg'
-        elif [[ "$style" =~ 'a'[0-9]+$ ]] ; then
-          s+=";${style:1}"
-        elif [[ "$style" =~ '#'[0-9a-fA-F]{6}$ ]] ; then
-          rgb=$((16#${style:1}))
-          s+=";$cmd$(($rgb>>16));$((($rgb>>8)&0xff));$(($rgb&0xff))"
-        elif [[ "$style" =~ '#'[0-9a-fA-F]{3}$ ]] ; then
-          rgb=$((16#${style:1}))
-          echo ";$((($rgb&0xf00)>>4));$(($rgb&0xf0));$((($rgb&0xf)<<4))"
-          s+=";$cmd$((($rgb&0xf00)>>4));$(($rgb&0xf0));$((($rgb&0xf)<<4))"
-        elif [[ "$style" =~ [0-9]+$ ]] ; then
-          s+=";$cmd$style"
-          cmd=''
         else
-          echo "Invalid '$style' color." >&2
-          exit 5
+          if [[ "$style" =~ ^'#'[0-9a-fA-F]{6}$ ]] ; then
+            rgb=$((16#${style:1}))
+            s+=";$cmd;2;$(($rgb>>16));$((($rgb>>8)&0xff));$(($rgb&0xff))"
+          # rgb444 hexadecimal color (#fff)
+          elif [[ "$style" =~ ^'#'[0-9a-fA-F]{3}$ ]] ; then
+            rgb=$((16#${style:1}))
+            s+=";$cmd;2;$((($rgb>>8)*16));$(((($rgb>>4)&0xf)*16));$((($rgb&0xf)*16))"
+          # 256 colors
+          elif [[ "$style" =~ ^'25'[0-5]$|^[0-2][0-4][0-9]$|^[0-9][0-9]$ ]] ; then
+            s+=";$cmd;5;${style:1}"
+          else
+            echo "Invalid '$style' color." >&2
+            exit 5
+          fi
         fi
       else
         s+=";$v"
+        cmd='38'
+        prefix='fg'
       fi
     done
     append "$s"

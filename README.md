@@ -1,4 +1,4 @@
-# Colout -- Add colors to a text stream in your terminal
+# Colout -- Colorize text stream in your terminal
 
 Inspired by http://nojhan.github.com/colout/
 
@@ -43,14 +43,20 @@ Inspired by http://nojhan.github.com/colout/
    l[ight_]magenta,lm
    l[ight_]cyan,lc
 
- rgb color:
-  {0..255},{0..255},{0..255}
-  Hexadecimal triplet (cf '#22fa44' or '#ae3')
+ rgb888 color:
+  Hexadecimal triplet: #[0-9a-fA-F]{6} (ex: '#22fa44')
 
- ASCII color:
-  a{0..255}
+ rgb444 color:
+  Hexadecimal triplet: #[0-9a-fA-F]{3}, (ex: '#ae3')
 
- prefix color selector:
-  fg=
-  bg=  bg
+ 256 colors: {0..15}
+
+ ANSI/Escape color:
+  e{0..255}
+
+ background prefix:
+  bg=
+
+ example:
+  ./colout '(..)..(..)' red,bg=#8f10e5,italic bg=yellow,k <<<abcdefgh
 ```
