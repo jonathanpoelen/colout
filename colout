@@ -3,10 +3,10 @@
 usage() {
 echo -e \
 "$0 -l [--] [COLORS_AND_STYLES...]\n"\
-"$0 [-rg] [--] PATTERN [COLORS_AND_STYLES...] [-- [-rg] [--] PATTERN [COLORS_AND_STYLES...]]...\n\n"\
+"$0 [-rn] [--] PATTERN [COLORS_AND_STYLES...] [-- [-rn] [--] PATTERN [COLORS_AND_STYLES...]]...\n\n"\
 " -l  Colors the lines\n\n"\
 " -r  Apply the regex on the line until it is no longer able to\n\n"\
-" -g  Color each match to a different color. Implies -r\n\n"\
+" -n  Switches to the next color for each match. Implies -r\n\n"\
 " styles:\n"\
   "  normal,N\n"\
   "  bold,B\n"\
@@ -36,47 +36,72 @@ echo -e \
   "  l[ight_]cyan,lc\n\n"\
 " rgb888 color:\n  Hexadecimal triplet: #[0-9a-fA-F]{6} (ex: '#22fa44')\n\n"\
 " rgb444 color:\n  Hexadecimal triplet: #[0-9a-fA-F]{3}, (ex: '#ae3')\n\n"\
-" 256 colors: {0..255}\n\n"\
+" 256 colors:\n  {0..255}\n\n"\
 " ANSI/Escape color:\n  e{0..15}\n\n"\
 " background prefix:\n  bg=\n\n"\
 " example:\n  $0 '(..)..(..)' red,bg=#8f10e5,italic bg=yellow,k <<<abcdefgh"\
 >&2
 }
 
+parse_cli () {
+  line_mode=0
+  repeat_rgx_mode=0
+  loop_mode=0
+  scale_mode=0
+  all_mode=0
+  min_scale=0
+  max_scale=100
+  units=''
 
-line_mode=0
-repeat_rgx_mode=0
-loop_mode=0
+  while getopts ':s:S:hlrna' optname
+  do
+    case "$optname" in
+      l) line_mode=1 ;;
+      a) all_mode=1 ;;
+      r) repeat_rgx_mode=1 ;;
+      n) loop_mode=1 ; repeat_rgx_mode=1 ;;
+      s)
+        IFS=',' read min_scale max_scale <<<"$OPTARG"
+        if [ -z "$max_scale" ] ; then
+          max_scale="$min_scale"
+          min_scale=0
+        fi
+        if [[
+          ! "$min_scale" =~ ^[0-9]+$|^[0-9]+.?[0-9]*$|^[0-9]*.?[0-9]+$ ||
+          ! "$max_scale" =~ ^[0-9]+$|^[0-9]+.?[0-9]*$|^[0-9]*.?[0-9]+$ ||
+          "$max_scale" -lt "$min_scale"
+        ]] ; then
+          echo "-s $min_scale,$max_scale bad format"
+          usage
+          exit
+        fi
+        scale_mode=1
+        ;;
+      S) units="$OPTARG" ; scale_mode=1 ;;
+      \?) break ;;
+      :) echo "Option -$OPTARG requires an argument." >&2 ;  usage ; exit 1 ;;
+      h) usage ; exit 1 ;;
+    esac
+  done
+}
 
-while getopts 'hlrg' optname
-do
-  case "$optname" in
-    l)
-      pattern=''
-      line_mode=1
-      append(){
-        [ ! -z "$pattern" ] && pattern+=';n;'
-        pattern+="s/^/${start}0${1}m/;s/$/${start}0m/"
-      }
-      run(){ sed "$pattern" ; }
-      ;;
-    r) repeat_rgx_mode=1 ;;
-    g) loop_mode=1 ;;
-    \?) break ;;
-    h) usage ; exit 1 ;;
-  esac
-done
-
+parse_cli "$@"
 shift $(($OPTIND-1))
 
+#if [ $# = 0 ] && [ $line_mode = 0 ] && [ $scale_mode = 0 ] ; then
 if [ $# = 0 ] && [ $line_mode = 0 ] ; then
   usage
   exit 1
 fi
 
-[ $loop_mode = 1 ] && repeat_rgx_mode=1
-
-if [ $line_mode = 0 ] ; then
+if [ $line_mode = 1 ] ; then
+  pattern=''
+  append(){
+    [ ! -z "$pattern" ] && pattern+=';n;'
+    pattern+="s/^/\x1b0[${1}m/;s/$/\x1b[0m/"
+  }
+  run(){ exec sed "$pattern" ; }
+else
   rgx="$1"
   shift
   icol=0
@@ -89,19 +114,28 @@ if [ $line_mode = 0 ] ; then
 
   awk_script=''
   awk_begin_script=''
+  [ $scale_mode = 1 ] && awk_begin_script="dscale=$max_scale-$min_scale;"
   mk_rgx_block() {
     rgx=${rgx//\//\\/}
 
-    rep_start=''
-    rep_stop=''
+    local rep_start=''
+    local rep_stop=''
     if [ $repeat_rgx_mode = 1 ] ; then
       rep_start='do {'
-      rep_stop='$0 = substr($0, RLENGTH+1) } while (match($0, /'"$rgx"'/, a))'
+      rep_stop='$0 = substr($0, RSTART+RLENGTH) } while (match($0, /'"$rgx"'/, a))'
     fi
 
-    [ $loop_mode = 1 ] &&
-      awk_i_color='icol++' ||
-      awk_i_color='(i-1)'
+    local a_i_color='"\x1B[" colors'$ireg'['
+    if [ ! -z "$units" ] ; then
+      a_i_color+='get_icol(a[i]-'$min_scale', index("'$units'",substr(a[i], length(a[i]),1)), nb_colors'$ireg')'
+    elif [ $scale_mode = 1 ] ; then
+      a_i_color+='int((a[i] - '$min_scale')*nb_colors'$ireg'/dscale)'
+    elif [ $loop_mode = 1 ] ; then
+      a_i_color+='icol++%nb_colors'$ireg
+    else
+      a_i_color+='ic%nb_colors'$ireg
+    fi
+    a_i_color+='] "m" a[i] "\x1B[0m"'
 
     awk_begin_script+="$colors"' nb_colors'$ireg'='$icol';'
     awk_script+='
@@ -110,7 +144,9 @@ if [ $line_mode = 0 ] ; then
       '"$rep_start"'
       n = length(a)/3
       if (n == 1) {
-        s = s "\x1B[" colors'$ireg'['"$awk_i_color"'%nb_colors'$ireg'] "m" a[0] "\x1B[0m"
+        i = 0
+        ic= 0
+        s = s substr($0, 0, RSTART-1) '"$a_i_color"'
       }
       else {
         c = ""
@@ -121,20 +157,28 @@ if [ $line_mode = 0 ] ; then
             ++n;
             continue
           }
-          s = s substr($0, p, start-p) "\x1B[" colors'$ireg'['"$awk_i_color"'%nb_colors'$ireg'] "m" a[i] "\x1B[0m"
+          ic= i-1
+          s = s substr($0, p, start-p) '"$a_i_color"'
           p = start+a[i,"length"]
         }
+        s = s substr($0, p, RSTART+RLENGTH-p)
       }
-      '"$rep_stop"'
-      print s substr($0, RLENGTH+1)
-    } else '
+      '"$rep_stop"
+    [ $all_mode = 1 ] &&
+      awk_script+=';$0 = s substr($0, RLENGTH+1) }' ||
+      awk_script+=';print s substr($0, RLENGTH+1) } else '
     ((++ireg))
     icol=0
   }
 
   run() {
     mk_rgx_block
-    awk 'BEGIN { '"$awk_begin_script"' } { '"$awk_script"' print $0 }'
+    exec awk 'function get_icol(v,i,n) {
+        if (i<=0) i = 1;
+        step=int(n/'${#units}')
+        return int(step*(i-1)+v*step/dscale)
+      }
+      BEGIN { '"$awk_begin_script"' } { '"$awk_script"' print $0 }'
   }
 fi
 
@@ -207,7 +251,6 @@ set_default_colors() {
   append ';1;37'
 }
 
-start="$(echo -e "\e")["
 cmd='38'
 prefix='fg'
 
@@ -225,22 +268,10 @@ else
       mk_rgx_block
 
       OPTIND=1
-      loop_mode=0;
-      while getopts 'hrg' optname
-      do
-        case "$optname" in
-          r) ;;
-          g) loop_mode=1 ;;
-          \?) break ;;
-          h) usage ; exit 1 ;;
-        esac
-      done
-
-      echo "$@"
-
+      parse_cli "$@"
       shift $(($OPTIND-1))
 
-      if [ $# = 0 ] ; then
+      if [ $# = 0 ] || [ $line_mode = 1 ] ; then
         usage
         exit 1
       fi
@@ -253,7 +284,6 @@ else
     fi
 
     # note: "bg,red" is equivalent to "bg=red"
-    # note: "bg,red blue" is equivalent to "bg=red bg=blue"
     IFS=',=' read -a styles <<<"$1"
     s=''
     for style in "${styles[@]}" ; do

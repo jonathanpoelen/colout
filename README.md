@@ -5,13 +5,13 @@ Inspired by http://nojhan.github.com/colout/
 
 ```
 ./colout -l [--] [COLORS_AND_STYLES...]
-./colout [-rp] [--] PATTERN [COLORS_AND_STYLES...] [-- [-rp] [--] PATTERN [COLORS_AND_STYLES...]]...
+./colout [-rn] [--] PATTERN [COLORS_AND_STYLES...] [-- [-rn] [--] PATTERN [COLORS_AND_STYLES...]]...
 
  -l  Colorize by lines.
 
  -r  Apply the PATTERN on the line until it is no longer able to.
 
- -p  Use all palette colors to color a line. Implies -r.
+ -n  Switches to the next color for each match. Implies -r.
 
 
  styles:
@@ -49,7 +49,7 @@ Inspired by http://nojhan.github.com/colout/
  rgb444 color:
   Hexadecimal triplet: #[0-9a-fA-F]{3}, (ex: '#ae3')
 
- 256 colors: {0..15}
+ 256 colors: {0..255}
 
  ANSI/Escape color:
   e{0..255}
@@ -58,5 +58,6 @@ Inspired by http://nojhan.github.com/colout/
   bg=
 
  example:
-  ./colout '(..)..(..)' red,bg=#8f10e5,italic bg=yellow,k <<<abcdefgh
+  colout '(..)..(..)' red,bg=#8f10e5,italic bg=yellow,k <<<abcdefgh
+  ls -l | colout '^(.)(.)(.)(.)(.)(.)(.)(.)(.)(.)' b g g,i g,B y y,i y,B r r,i r,B
 ```
