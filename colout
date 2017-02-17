@@ -43,23 +43,28 @@ echo -e \
 >&2
 }
 
+print_mode=0
+all_mode=0
+
 parse_cli () {
   line_mode=0
-  repeat_rgx_mode=0
-  loop_mode=0
   scale_mode=0
-  all_mode=0
+  loop_color_mode=0
+  continue_mode=0
+  again_mode=0
   min_scale=0
   max_scale=100
   units=''
 
-  while getopts ':s:S:hlrna' optname
+  while getopts ':s:S:hlrcanp' optname
   do
     case "$optname" in
       l) line_mode=1 ;;
       a) all_mode=1 ;;
-      r) repeat_rgx_mode=1 ;;
-      n) loop_mode=1 ; repeat_rgx_mode=1 ;;
+      r) again_mode=1 ;;
+      n) loop_color_mode=1 ;;
+      c) continue_mode=1 ;;
+      p) print_mode=1 ;;
       s)
         IFS=',' read min_scale max_scale <<<"$OPTARG"
         if [ -z "$max_scale" ] ; then
@@ -100,7 +105,11 @@ if [ $line_mode = 1 ] ; then
     [ ! -z "$pattern" ] && pattern+=';n;'
     pattern+="s/^/\x1b0[${1}m/;s/$/\x1b[0m/"
   }
-  run(){ exec sed "$pattern" ; }
+  run(){
+    local cmd
+    [ $print_mode = 1 ] && cmd='echo' || cmd='exec'
+    $cmd sed "$pattern" ;
+  }
 else
   rgx="$1"
   shift
@@ -114,13 +123,14 @@ else
 
   awk_script=''
   awk_begin_script=''
+  has_continue_mode=0
   [ $scale_mode = 1 ] && awk_begin_script="dscale=$max_scale-$min_scale;"
   mk_rgx_block() {
     rgx=${rgx//\//\\/}
 
     local rep_start=''
     local rep_stop=''
-    if [ $repeat_rgx_mode = 1 ] ; then
+    if [ $again_mode = 1 ] ; then
       rep_start='do {'
       rep_stop='$0 = substr($0, RSTART+RLENGTH) } while (match($0, /'"$rgx"'/, a))'
     fi
@@ -130,7 +140,7 @@ else
       a_i_color+='get_icol(a[i]-'$min_scale', index("'$units'",substr(a[i], length(a[i]),1)), nb_colors'$ireg')'
     elif [ $scale_mode = 1 ] ; then
       a_i_color+='int((a[i] - '$min_scale')*nb_colors'$ireg'/dscale)'
-    elif [ $loop_mode = 1 ] ; then
+    elif [ $loop_color_mode = 1 ] ; then
       a_i_color+='icol++%nb_colors'$ireg
     else
       a_i_color+='ic%nb_colors'$ireg
@@ -140,7 +150,6 @@ else
     awk_begin_script+="$colors"' nb_colors'$ireg'='$icol';'
     awk_script+='
     if (match($0, /'"$rgx"'/, a)) {
-      s = ""
       '"$rep_start"'
       n = length(a)/3
       if (n == 1) {
@@ -163,22 +172,32 @@ else
         }
         s = s substr($0, p, RSTART+RLENGTH-p)
       }
-      '"$rep_stop"
-    [ $all_mode = 1 ] &&
-      awk_script+=';$0 = s substr($0, RLENGTH+1) }' ||
-      awk_script+=';print s substr($0, RLENGTH+1) } else '
+      '"$rep_stop"'
+      $0 = substr($0, RLENGTH+1)
+    }'
+    [ $continue_mode != 1 ] && awk_script+='else ' || has_continue_mode=1
     ((++ireg))
     icol=0
   }
 
   run() {
     mk_rgx_block
-    exec awk 'function get_icol(v,i,n) {
+    [ $continue_mode != 1 ] && awk_script+=' if(0){}'
+    local pre_awk_script=''
+    local post_awk_script=''
+    if [ $all_mode = 1 ] ; then
+      pre_awk_script='len=length($0); do {'
+      post_awk_script='previous_len=len;len=length($0) } while (previous_len != len);'
+    fi
+    local cmd
+    [ $print_mode = 1 ] && cmd='echo' || cmd='exec'
+    $cmd awk 'function get_icol(v,i,n) {
         if (i<=0) i = 1;
         step=int(n/'${#units}')
         return int(step*(i-1)+v*step/dscale)
       }
-      BEGIN { '"$awk_begin_script"' } { '"$awk_script"' print $0 }'
+      BEGIN { '"$awk_begin_script"' }
+      { s="";'"$pre_awk_script $awk_script $post_awk_script"' print s $0 }'
   }
 fi
 
