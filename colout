@@ -4,12 +4,13 @@ usage() {
 echo -ne "Add colors to a text stream in your terminal.\n\n"\
 "$0 -h\n"\
 "$0 -l [COLORS_AND_STYLES...]\n"\
-"$0 [-rcanpo] [-s scale] [-u units] [-x awk_expr] [-X awk_expr] [-f awk_func] PATTERN [COLORS_AND_STYLES...] [-- ...]\n\n"\
+"$0 [-rcankpo] [-s scale] [-u units] [-x awk_expr] [-X awk_expr] [-f awk_func] PATTERN [COLORS_AND_STYLES...] [-- ...]\n\n"\
 " -l  (line) Colors the lines\n\n"\
 " -r  (repeat/again) Apply PATTERN until there is no more matching.\n\n"\
 " -a  (all) Loop on all PATTERN until there is no more matching.\n\n"\
 " -c  (continue) Try PATTERN even if previous ones match.\n\n"\
 " -n  (next) Each match passes to the next color.\n\n"\
+" -k  (keep) Use the previous color map.\n\n"\
 " -p  (print) print awk/sed command.\n\n"\
 " -o  (optimize) See man awk -o/--optimize.\n\n"\
 " -s scale  'min,max' or 'max'. Apply colors linearly between min and max (0,100 by default).\n\n"\
@@ -82,6 +83,7 @@ parse_cli () {
   loop_color_mode=0
   continue_mode=0
   again_mode=0
+  keep_color=0
   min_scale=0
   max_scale=100
   units=''
@@ -89,13 +91,14 @@ parse_cli () {
   user_scale_expr=''
   awk_user_funcs=''
 
-  while getopts ':s:u:x:X:f:hlrcanpo' optname
+  while getopts ':s:u:x:X:f:hlrcankpo' optname
   do
     case "$optname" in
       l) line_mode=1 ;;
       a) all_mode=1 ;;
       r) again_mode=1 ;;
       n) loop_color_mode=1 ;;
+      k) keep_color=1 ;;
       c) continue_mode=1 ;;
       p) print_mode=1 ;;
       x) user_expr="$OPTARG" ;;
@@ -125,6 +128,8 @@ parse_cli () {
       h) usage ; exit 1 ;;
     esac
   done
+
+  [ $keep_color = 0 ] && colors=''
 }
 
 parse_cli "$@"
@@ -240,7 +245,6 @@ else
     }'
     ((++ireg))
     icol=0
-    colors=''
   }
 
   run() {
