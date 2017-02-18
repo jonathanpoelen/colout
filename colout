@@ -55,8 +55,11 @@ parse_cli () {
   min_scale=0
   max_scale=100
   units=''
+  user_expr=''
+  user_scale_expr=''
+  awk_user_funcs=''
 
-  while getopts ':s:S:hlrcanp' optname
+  while getopts ':s:u:x:X:f:hlrcanp' optname
   do
     case "$optname" in
       l) line_mode=1 ;;
@@ -65,6 +68,9 @@ parse_cli () {
       n) loop_color_mode=1 ;;
       c) continue_mode=1 ;;
       p) print_mode=1 ;;
+      x) user_expr="$OPTARG" ;;
+      X) user_scale_expr="$OPTARG" ;;
+      f) awk_user_funcs="$OPTARG" ;;
       s)
         IFS=',' read min_scale max_scale <<<"$OPTARG"
         if [ -z "$max_scale" ] ; then
@@ -82,7 +88,7 @@ parse_cli () {
         fi
         scale_mode=1
         ;;
-      S) units="$OPTARG" ; scale_mode=1 ;;
+      u) units="$OPTARG" ; scale_mode=1 ;;
       \?) break ;;
       :) echo "Option -$OPTARG requires an argument." >&2 ;  usage ; exit 1 ;;
       h) usage ; exit 1 ;;
@@ -123,8 +129,11 @@ else
 
   awk_script=''
   awk_begin_script=''
+  awk_funcs=''
   has_continue_mode=0
   [ $scale_mode = 1 ] && awk_begin_script="dscale=$max_scale-$min_scale;"
+  s_i_unit='index("'$units'",substr(a[i], length(a[i]),1))'
+  v_compute='*nb_colors'$ireg'/(dscale*'${#units}')'
   mk_rgx_block() {
     rgx=${rgx//\//\\/}
 
@@ -136,8 +145,29 @@ else
     fi
 
     local a_i_color='"\x1B[" colors'$ireg'['
-    if [ ! -z "$units" ] ; then
-      a_i_color+='get_icol(a[i]-'$min_scale', index("'$units'",substr(a[i], length(a[i]),1)), nb_colors'$ireg')'
+    if [ ! -z "$user_expr" ] ; then
+      local uexpr='{r=int('"$user_expr"')
+        return r<0?0:(r>=nb_colors'$ireg'?nb_colors'$ireg'-1:r)}'
+      if [ -z "$units" ] ; then
+        a_i_color+='uexpr'$ireg'(a[i], nb_colors'$ireg')'
+        awk_funcs+='function uexpr'$ireg'(v,n)'$uexpr
+      else
+        a_i_color+='uexpr'$ireg'(a[i], '$s_i_unit', nb_colors'$ireg')'
+        awk_funcs+='function uexpr'$ireg'(v,u,n)'$uexpr
+      fi
+    elif [ ! -z "$user_scale_expr" ] ; then
+      if [ -z "$units" ] ; then
+        a_i_color+='uexpr'$ireg'(a[i])'$v_compute
+        awk_funcs+='function uexpr'$ireg'(v){return '"$user_expr"'}'
+      else
+        a_i_color+='uexpr'$ireg'(a[i], '$s_i_unit')'$v_compute
+        awk_funcs+='function uexpr'$ireg'(v,u){return '"$user_expr"'}'
+      fi
+    elif [ ! -z "$units" ] ; then
+      a_i_color+='get_icol'$ireg'(a[i]-'$min_scale', '$s_i_unit')'
+      awk_funcs+='function get_icol'$ireg'(v,u){
+        istart=int((nb_colors'$ireg'/'${#units}')*(u>0?u-1:0))
+        return int(istart+(v'$v_compute'))}'
     elif [ $scale_mode = 1 ] ; then
       a_i_color+='int((a[i] - '$min_scale')*nb_colors'$ireg'/dscale)'
     elif [ $loop_color_mode = 1 ] ; then
@@ -173,7 +203,7 @@ else
         s = s substr($0, p, RSTART+RLENGTH-p)
       }
       '"$rep_stop"'
-      $0 = substr($0, RLENGTH+1)
+      $0 = substr($0, RLENGTH+RSTART)
     }'
     [ $continue_mode != 1 ] && awk_script+='else ' || has_continue_mode=1
     ((++ireg))
@@ -191,11 +221,8 @@ else
     fi
     local cmd
     [ $print_mode = 1 ] && cmd='echo' || cmd='exec'
-    $cmd awk 'function get_icol(v,i,n) {
-        if (i<=0) i = 1;
-        step=int(n/'${#units}')
-        return int(step*(i-1)+v*step/dscale)
-      }
+    $cmd awk "$awk_funcs
+      $awk_user_funcs"'
       BEGIN { '"$awk_begin_script"' }
       { s="";'"$pre_awk_script $awk_script $post_awk_script"' print s $0 }'
   }
