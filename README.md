@@ -14,11 +14,13 @@ Inspired by http://nojhan.github.com/colout/
 
  -a  (all) Loop on all PATTERN until there is no more matching.
 
- -c  (continue) Continue on the next PATTERN even if there was a match.
+ -c  (continue) Try PATTERN even if previous ones match.
 
  -n  (next) Each match passes to the next color.
 
  -p  (print) print awk/sed command.
+
+ -o  (optimize) See man awk -o/--optimize.
 
  -s scale  'min,max' or 'max'. Apply colors linearly between min and max (0,100 by default).
 

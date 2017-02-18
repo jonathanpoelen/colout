@@ -8,7 +8,7 @@ echo -ne "Add colors to a text stream in your terminal.\n\n"\
 " -l  (line) Colors the lines\n\n"\
 " -r  (repeat/again) Apply PATTERN until there is no more matching.\n\n"\
 " -a  (all) Loop on all PATTERN until there is no more matching.\n\n"\
-" -c  (continue) Continue on the next PATTERN even if there was a match.\n\n"\
+" -c  (continue) Try PATTERN even if previous ones match.\n\n"\
 " -n  (next) Each match passes to the next color.\n\n"\
 " -p  (print) print awk/sed command.\n\n"\
 " -o  (optimize) See man awk -o/--optimize.\n\n"\
@@ -161,7 +161,6 @@ else
   awk_script=''
   awk_begin_script=''
   awk_funcs=''
-  has_continue_mode=0
   [ $scale_mode = 1 ] && awk_begin_script="dscale=$max_scale-$min_scale;"
   s_i_unit='index("'$units'",substr(a[i], length(a[i]),1))'
   v_compute='*nb_colors'$ireg'/(dscale*'${#units}')'
@@ -209,6 +208,7 @@ else
     a_i_color+='] "m" a[i] "\x1B[0m"'
 
     awk_begin_script+="$colors"' nb_colors'$ireg'='$icol';'
+    [ $continue_mode = 0 ] && [ $ireg != 0 ] && awk_script+='else '
     awk_script+='
     if (match($0, /'"$rgx"'/, a)) {
       '"$rep_start"'
@@ -236,14 +236,12 @@ else
       '"$rep_stop"'
       $0 = substr($0, RLENGTH+RSTART)
     }'
-    [ $continue_mode != 1 ] && awk_script+='else ' || has_continue_mode=1
     ((++ireg))
     icol=0
   }
 
   run() {
     mk_rgx_block
-    [ $continue_mode != 1 ] && awk_script+=' if(0){}'
     local pre_awk_script=''
     local post_awk_script=''
     if [ $all_mode = 1 ] ; then
