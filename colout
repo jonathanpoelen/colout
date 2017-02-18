@@ -24,13 +24,13 @@ echo -ne "Add colors to a text stream in your terminal.\n\n"\
 " -f awk_func  Awk user functions.\n\n"\
 "\n"\
 " styles:\n"\
-  "  normal,N\n"\
-  "  bold,B\n"\
+  "  normal,n\n"\
+  "  bold,o\n"\
   "  d[im]\n"\
   "  i[talic]\n"\
   "  u[nderline]\n"\
-  "  blink,K\n"\
-  "  reverse,R\n"\
+  "  blink,l\n"\
+  "  reverse,v\n"\
   "  [h]idden\n\n"\
 " named colors (Note: an uppercase character is considered to be bold)\n"\
   "  default,none\n"\
@@ -65,7 +65,7 @@ echo -ne "Add colors to a text stream in your terminal.\n\n"\
   "  echo abcdefgh | $0 '(..)..(..)' red,bg=#8f10e5,italic bg=yellow,k\n"\
   "  ls -shS ~/Videos | $0 -x 'log(v*(1000^u))' -u KMG '[0-9]+\.?[0-9]*.' Rainbow\n"\
   "  ls -shS ~/Videos | $0 -s 2000 -u KMG '[0-9]+\.?[0-9]*.' rainbow\n"\
-  "  ls -l | $0 '(.)(.)(.)(.)(.)(.)(.)(.)(.)(.)' B,b {r,g,y},{,i,B}\n"\
+  "  ls -l | $0 '(.)(.)(.)(.)(.)(.)(.)(.)(.)(.)' B {r,g,y},{,i,o}\n"\
   "  echo \$LS_COLORS | $0 -r '([^=]+)=([^:]+:)'\n"\
   "  echo \$PATH | $0 -rn '([^:]+):'\n"\
   "  echo 'Progress [########################] 100%' | $0 -rn '#' hidden,bg=Rainbow\n"\
@@ -262,10 +262,10 @@ declare -A style_names=(
   # styles
 
   [fgnormal]=0 [fgbold]=1 [fgdim]=2 [fgitalic]=3 [fgunderline]=4 [fgblink]=5 [fgreverse]=7 [fghidden]=8
-  [fgN]=0 [fgB]=1 [fgd]=2 [fgi]=3 [fgu]=4 [fgK]=5 [fgR]=7 [fgh]=8
+  [fgn]=0 [fgo]=1 [fgd]=2 [fgi]=3 [fgu]=4 [fgl]=5 [fgv]=7 [fgh]=8
 
   [bgnormal]=0 [bgbold]=1 [bgdim]=2 [bgitalic]=3 [bgunderline]=4 [bgblink]=5 [bgreverse]=7 [bghidden]=8
-  [bgN]=0 [bgB]=1 [bgd]=2 [bgi]=3 [bgu]=4 [bgK]=5 [bgR]=7 [bgh]=8
+  [bgn]=0 [bgo]=1 [bgd]=2 [bgi]=3 [bgu]=4 [bgl]=5 [bgv]=7 [bgh]=8
 
 
   # foreground
@@ -382,7 +382,7 @@ else
           v2=${style_names[$prefix${style,,}]}
           # Bold and color
           if [ ! -z "$v2" ] ; then
-            s+=";1;$v2"
+            s+=";$v2;1"
           # rgb888 hexadecimal color (#ffffff)
           elif [[ "$style" =~ ^'#'[0-9a-fA-F]{6}$ ]] ; then
             rgb=$((16#${style:1}))
