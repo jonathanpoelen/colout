@@ -1,12 +1,28 @@
 #!/bin/bash
 
 usage() {
-echo -e \
-"$0 -l [--] [COLORS_AND_STYLES...]\n"\
-"$0 [-rn] [--] PATTERN [COLORS_AND_STYLES...] [-- [-rn] [--] PATTERN [COLORS_AND_STYLES...]]...\n\n"\
-" -l  Colors the lines\n\n"\
-" -r  Apply the regex on the line until it is no longer able to\n\n"\
-" -n  Switches to the next color for each match. Implies -r\n\n"\
+echo -ne "Add colors to a text stream in your terminal.\n\n"\
+"$0 -h\n"\
+"$0 -l [COLORS_AND_STYLES...]\n"\
+"$0 [-rcanp] [-s scale] [-u units] [-x awk_expr] [-X awk_expr] [-f awk_func] PATTERN [COLORS_AND_STYLES...] [-- ...]\n\n"\
+" -l  (line) Colors the lines\n\n"\
+" -r  (repeat/again) Apply PATTERN until there is no more matching.\n\n"\
+" -a  (all) Loop on all PATTERN until there is no more matching.\n\n"\
+" -c  (continue) Continue on the next PATTERN even if there was a match.\n\n"\
+" -n  (next) Each match passes to the next color.\n\n"\
+" -p  (print) print awk/sed command.\n\n"\
+" -s scale  'min,max' or 'max'. Apply colors linearly between min and max (0,100 by default).\n\n"\
+" -u units  Cuts the color range per unit.\n\n"\
+" -x awk_expr  An expression that returns the color index.\n"\
+"              'v' the extracted value\n"\
+"              'n' the number of color\n"\
+"              'u' (only if -u) the unit position (1 is first unit, 0 is an unrecognized unit).\n\n"\
+" -X awk_expr  An expression that returns a numeric value between min and max (see '-s scale').\n"\
+"              'v' the extracted value\n"\
+"              'n' the number of color\n"\
+"              'u' (only if -u) the unit position (1 is first unit, 0 is an unrecognized unit).\n\n"\
+" -f awk_func  Awk user functions.\n\n"\
+"\n"\
 " styles:\n"\
   "  normal,N\n"\
   "  bold,B\n"\
@@ -16,7 +32,7 @@ echo -e \
   "  blink,K\n"\
   "  reverse,R\n"\
   "  [h]idden\n\n"\
-" named colors:\n"\
+" named colors (Note: an uppercase character is considered to be bold)\n"\
   "  default,none\n"\
   "  [blac]k\n"\
   "  w[hite]\n"\
@@ -34,12 +50,25 @@ echo -e \
   "  l[ight_]yellow,ly\n"\
   "  l[ight_]magenta,lm\n"\
   "  l[ight_]cyan,lc\n\n"\
-" rgb888 color:\n  Hexadecimal triplet: #[0-9a-fA-F]{6} (ex: '#22fa44')\n\n"\
-" rgb444 color:\n  Hexadecimal triplet: #[0-9a-fA-F]{3}, (ex: '#ae3')\n\n"\
-" 256 colors:\n  {0..255}\n\n"\
-" ANSI/Escape color:\n  e{0..15}\n\n"\
-" background prefix:\n  bg=\n\n"\
-" example:\n  $0 '(..)..(..)' red,bg=#8f10e5,italic bg=yellow,k <<<abcdefgh"\
+" color map:\n"\
+  "  default,Default\n"\
+  "  rainbow\n"\
+  "  Rainbow\n"\
+  "  spectrum\n"\
+  "  Spectrum\n\n"\
+" rgb888 color:\n   Hexadecimal triplet: #[0-9a-fA-F]{6} (ex: '#22fa44')\n\n"\
+" rgb444 color:\n   Hexadecimal triplet: #[0-9a-fA-F]{3}, (ex: '#ae3')\n\n"\
+" 256 colors:\n   {0..255}\n\n"\
+" ANSI/Escape color:\n   e{0..15}\n\n"\
+" background prefix:\n   bg=\n\n"\
+" example:\n"\
+  "  echo abcdefgh | $0 '(..)..(..)' red,bg=#8f10e5,italic bg=yellow,k\n"\
+  "  ls -shS ~/Videos | $0 -x 'log(v*(1000^u))' -u KMG '[0-9]+\.?[0-9]*.' Rainbow\n"\
+  "  ls -shS ~/Videos | $0 -s 2000 -u KMG '[0-9]+\.?[0-9]*.' rainbow\n"\
+  "  ls -l | $0 '(.)(.)(.)(.)(.)(.)(.)(.)(.)(.)' B,b {r,g,y},{,i,B}\n"\
+  "  echo \$LS_COLORS | $0 -r '([^=]+)=([^:]+:)'\n"\
+  "  echo \$PATH | $0 -rn '([^:]+):'\n"\
+  "  echo 'Progress [########################] 100%' | $0 -rn '#' hidden,bg=Rainbow\n"\
 >&2
 }
 
