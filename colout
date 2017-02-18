@@ -143,6 +143,7 @@ if [ $line_mode = 1 ] ; then
     pattern+="s/^/\x1b0[${1}m/;s/$/\x1b[0m/"
   }
   run(){
+    [ -z "$pattern" ] && append_color {31..37}
     local cmd
     [ $print_mode = 1 ] && cmd='echo' || cmd='exec'
     $cmd sed "$pattern" ;
@@ -166,6 +167,7 @@ else
   v_compute='*nb_colors'$ireg'/(dscale*'${#units}')'
   mk_rgx_block() {
     rgx=${rgx//\//\\/}
+    [ -z "$colors" ] && append_color {31..37}
 
     local rep_start=''
     local rep_stop=''
@@ -238,6 +240,7 @@ else
     }'
     ((++ireg))
     icol=0
+    colors=''
   }
 
   run() {
@@ -339,85 +342,79 @@ append_color() {
   done
 }
 
-if [ $# = 0 ] ; then
-  append_color {31..37}
-else
-  while [ $# != 0 ] ; do
-    # re-parse: "-- [-rg] [--] PATTERN [COLORS_AND_STYLES...]]..."
-    if [ "$1" = '--' ] ; then
-      if [ $line_mode = 1 ] ; then
-        usage
-        exit 5
-      fi
-      shift
-      mk_rgx_block
+while [ $# != 0 ] ; do
+  # re-parse: "-- [-rg] [--] PATTERN [COLORS_AND_STYLES...]]..."
+  if [ "$1" = '--' ] ; then
+    if [ $line_mode = 1 ] ; then
+      usage
+      exit 5
+    fi
+    shift
+    mk_rgx_block
 
-      OPTIND=1
-      parse_cli "$@"
-      shift $(($OPTIND-1))
+    OPTIND=1
+    parse_cli "$@"
+    shift $(($OPTIND-1))
 
-      if [ $# = 0 ] || [ $line_mode = 1 ] ; then
-        usage
-        exit 1
-      fi
-
-      rgx="$1"
-      shift
-      [ $# = 0 ] && append_color {31..37}
-
-      continue
+    if [ $# = 0 ] || [ $line_mode = 1 ] ; then
+      usage
+      exit 1
     fi
 
-    # note: "bg,red" is equivalent to "bg=red"
-    IFS=',=' read -a styles <<<"$1"
-    s=''
-    for style in "${styles[@]}" ; do
-      # background selector
-      if [ bg = "$style" ] ; then
-        cmd='48'
-        prefix='bg'
-      else
-        v=${style_names[$prefix$style]}
-        if [ -z "$v" ] ; then
-          v2=${style_names[$prefix${style,,}]}
-          # Bold and color
-          if [ ! -z "$v2" ] ; then
-            s+=";$v2;1"
-          # rgb888 hexadecimal color (#ffffff)
-          elif [[ "$style" =~ ^'#'[0-9a-fA-F]{6}$ ]] ; then
-            rgb=$((16#${style:1}))
-            s+=";$cmd;2;$(($rgb>>16));$((($rgb>>8)&0xff));$(($rgb&0xff))"
-          # rgb444 hexadecimal color (#fff)
-          elif [[ "$style" =~ ^'#'[0-9a-fA-F]{3}$ ]] ; then
-            rgb=$((16#${style:1}))
-            s+=";$cmd;2;$((($rgb>>8)*16));$(((($rgb>>4)&0xf)*16));$((($rgb&0xf)*16))"
-          # 256 colors
-          elif [[ "$style" =~ ^'25'[0-5]$|^[0-2][0-4][0-9]$|^[0-9][0-9]$ ]] ; then
-            s+=";$cmd;5;${style:1}"
-          else
-            case "$style" in
-              rainbow) append_color_name \
-                m b c g y ; s+=";${style_names[${prefix}r]}" ;;
-              Rainbow) append_color256 \
-                92 93 57 21 27 33 39 45 51 50 49 48 47 46 82 118 154 190 226 220 214 208 202 ; s+="$s;$cmd;5;196" ;;
-              spectrum) append_color_name \
-                m b c w g y ; s+=";${style_names[${prefix}r]}" ;;
-              Spectrum) append_color256 \
-                91 92 56 57 21 27 26 32 31 37 36 35 41 40 41 77 83 84 120 121 157 194 231 254 255 231 230 229 228 227 226 220 214 208 202 ; s+="$s;$cmd;5;196" ;;
-              default|Default) append_color {31..36} ; s+="$s;$cmd;37" ;;
-              *) echo "Invalid '$style' color." >&2 ; exit 5 ;;
-            esac
-          fi
-        else
-          s+=";$v"
-        fi
-        cmd='38'
-        prefix='fg'
-      fi
-    done
-    append "$s"
+    rgx="$1"
     shift
+    continue
+  fi
+
+  # note: "bg,red" is equivalent to "bg=red"
+  IFS=',=' read -a styles <<<"$1"
+  s=''
+  for style in "${styles[@]}" ; do
+    # background selector
+    if [ bg = "$style" ] ; then
+      cmd='48'
+      prefix='bg'
+    else
+      v=${style_names[$prefix$style]}
+      if [ -z "$v" ] ; then
+        v2=${style_names[$prefix${style,,}]}
+        # Bold and color
+        if [ ! -z "$v2" ] ; then
+          s+=";$v2;1"
+        # rgb888 hexadecimal color (#ffffff)
+        elif [[ "$style" =~ ^'#'[0-9a-fA-F]{6}$ ]] ; then
+          rgb=$((16#${style:1}))
+          s+=";$cmd;2;$(($rgb>>16));$((($rgb>>8)&0xff));$(($rgb&0xff))"
+        # rgb444 hexadecimal color (#fff)
+        elif [[ "$style" =~ ^'#'[0-9a-fA-F]{3}$ ]] ; then
+          rgb=$((16#${style:1}))
+          s+=";$cmd;2;$((($rgb>>8)*16));$(((($rgb>>4)&0xf)*16));$((($rgb&0xf)*16))"
+        # 256 colors
+        elif [[ "$style" =~ ^'25'[0-5]$|^[0-2][0-4][0-9]$|^[0-9][0-9]$ ]] ; then
+          s+=";$cmd;5;${style:1}"
+        else
+          case "$style" in
+            rainbow) append_color_name \
+              m b c g y ; s+=";${style_names[${prefix}r]}" ;;
+            Rainbow) append_color256 \
+              92 93 57 21 27 33 39 45 51 50 49 48 47 46 82 118 154 190 226 220 214 208 202 ; s+="$s;$cmd;5;196" ;;
+            spectrum) append_color_name \
+              m b c w g y ; s+=";${style_names[${prefix}r]}" ;;
+            Spectrum) append_color256 \
+              91 92 56 57 21 27 26 32 31 37 36 35 41 40 41 77 83 84 120 121 157 194 231 254 255 231 230 229 228 227 226 220 214 208 202 ; s+="$s;$cmd;5;196" ;;
+            default|Default) append_color {31..36} ; s+="$s;$cmd;37" ;;
+            *) echo "Invalid '$style' color." >&2 ; exit 5 ;;
+          esac
+        fi
+      else
+        s+=";$v"
+      fi
+      cmd='38'
+      prefix='fg'
+    fi
   done
-fi
+  append "$s"
+  shift
+done
 
 run
