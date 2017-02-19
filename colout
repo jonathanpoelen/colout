@@ -433,6 +433,10 @@ set_default_colors() {
   append_colors {31..37}
   append "$s"
 }
+invalid_style() {
+  echo "Invalid '$style' color." >&2
+  exit 5
+}
 
 while [ $# != 0 ] ; do
   # re-parse: "-- [-rg] [--] PATTERN [COLORS_AND_STYLES...]]..."
@@ -489,20 +493,21 @@ while [ $# != 0 ] ; do
           s+=";$cmd;2;${style//\//;}"
         else
           mapcmd=${colormap_cmds[$style]}
-          if [ ! "$mapcmd" ] && [ "${style:0:2}" = 'r:' ]; then
-            mapcmd=${colormap_cmds[${style:2}]}
-            if [ ! "$mapcmd" ] ; then
-              echo "Invalid '$style' color." >&2
-              exit 5
-            fi
+          if [ ! "$mapcmd" ] ; then
+            if [ "${style:0:2}" = 'r:' ]; then
+              mapcmd=${colormap_cmds[${style:2}]}
+              [ ! "$mapcmd" ] && invalid_style
 
-            # reverse order colormap
-            read ff comps <<<"$mapcmd"
-            mapcmd=''
-            for comp in $comps ; do
-              mapcmd="$comp $mapcmd"
-            done
-            mapcmd="$ff $mapcmd"
+              # reverse order colormap
+              read ff comps <<<"$mapcmd"
+              mapcmd=''
+              for comp in $comps ; do
+                mapcmd="$comp $mapcmd"
+              done
+              mapcmd="$ff $mapcmd"
+            else
+              invalid_style
+            fi
           fi
 
           $mapcmd
