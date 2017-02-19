@@ -3,14 +3,18 @@
 usage() {
 echo -ne "Add colors to a text stream in your terminal.\n\n"\
 "$0 -h\n"\
+"$0 -t [theme]\n"\
 "$0 -l [COLORS_AND_STYLES...]\n"\
 "$0 [-rcankpo] [-s scale] [-u units] [-x awk_expr] [-X awk_expr] [-f awk_func] PATTERN [COLORS_AND_STYLES...] [-- ...]\n\n"\
-" -l  (line) Colors the lines\n\n"\
+" -t [theme]  List or apply\n\n"\
+" -l  (line) Colors each lines\n\n"\
 " -r  (repeat/again) Apply PATTERN until there is no more matching.\n\n"\
 " -a  (all) Loop on all PATTERN until there is no more matching.\n\n"\
 " -c  (continue) Try PATTERN even if previous ones match.\n\n"\
 " -n  (next) Each match passes to the next color.\n\n"\
 " -k  (keep) Use the previous color map.\n\n"\
+" -R  (no-reset) Do not reset colors.\n\n"\
+" -N  (lc-numeric) Use the locale's decimal point character when parsing input data.\n\n"\
 " -p  (print) print awk/sed command.\n\n"\
 " -o  (optimize) See man awk -o/--optimize.\n\n"\
 " -s scale  'min,max' or 'max'. Apply colors linearly between min and max (0,100 by default).\n\n"\
@@ -23,7 +27,8 @@ echo -ne "Add colors to a text stream in your terminal.\n\n"\
 "              'v' the extracted value\n"\
 "              'n' the number of color\n"\
 "              'u' (only if -u) the unit position (1 is first unit, 0 is an unrecognized unit).\n\n"\
-" -f awk_func  Awk user functions.\n\n"\
+" -f awk_script  Awk user functions.\n\n"\
+" -v awk_script  Awk user variables.\n\n"\
 "\n"\
 " styles:\n"\
   "  normal,n\n"\
@@ -52,12 +57,31 @@ echo -ne "Add colors to a text stream in your terminal.\n\n"\
   "  l[ight_]yellow,ly\n"\
   "  l[ight_]magenta,lm\n"\
   "  l[ight_]cyan,lc\n\n"\
-" color map:\n"\
-  "  default,Default\n"\
-  "  rainbow\n"\
-  "  Rainbow\n"\
-  "  spectrum\n"\
-  "  Spectrum\n\n"\
+" colormap ('r:' reverse order):\n"\
+  "  [r:]default,Default\n"\
+  "  [r:]rainbow\n"\
+  "  [r:]Rainbow\n"\
+  "  [r:]rainbow2\n"\
+  "  [r:]Rainbow2\n"\
+  "  [r:]spectrum\n"\
+  "  [r:]Spectrum\n"\
+  "  [r:]set2\n"\
+  "  [r:]tab10\n"\
+  "  [r:]brewer\n"\
+  "  [r:]excel\n"\
+  "  [r:]reds\n"\
+  "  [r:]Reds\n"\
+  "  [r:]greens\n"\
+  "  [r:]Greens\n"\
+  "  [r:]blues\n"\
+  "  [r:]Blues\n"\
+  "  [r:]purples\n"\
+  "  [r:]Purples\n"\
+  "  [r:]darkpurples\n"\
+  "  [r:]navy\n"\
+  "  [r:]br\n"\
+  "  [r:]BR\n\n"\
+" rgb888 color:\n   Decimal triplet: [0-9]+/[0-9]+/[0-9]+ (ex: '123/213/42')\n\n"\
 " rgb888 color:\n   Hexadecimal triplet: #[0-9a-fA-F]{6} (ex: '#22fa44')\n\n"\
 " rgb444 color:\n   Hexadecimal triplet: #[0-9a-fA-F]{3}, (ex: '#ae3')\n\n"\
 " 256 colors:\n   {0..255}\n\n"\
@@ -65,12 +89,14 @@ echo -ne "Add colors to a text stream in your terminal.\n\n"\
 " background prefix:\n   bg=\n\n"\
 " example:\n"\
   "  echo abcdefgh | $0 '(..)..(..)' red,bg=#8f10e5,italic bg=yellow,k\n"\
-  "  ls -shS ~/Videos | $0 -x 'log(v*(1000^u))' -u KMG '[0-9]+\.?[0-9]*.' Rainbow\n"\
-  "  ls -shS ~/Videos | $0 -s 2000 -u KMG '[0-9]+\.?[0-9]*.' rainbow\n"\
+  "  ls -shS ~/Videos | ./colout -Nu KMG -x 'log(v*(1024**(u-1)))*2*n/MAX-n' -v 'MAX=log(15000000)' '[0-9]+\.?,?[0-9]*.' rainbow2\n"\
+  "  ls -shS ~/Videos | $0 -Ns 1000 -u KMG '[0-9]+\.?,?[0-9]*.' rainbow\n"\
   "  ls -l | $0 '(.)(.)(.)(.)(.)(.)(.)(.)(.)(.)' B {r,g,y},{,i,o}\n"\
   "  echo \$LS_COLORS | $0 -r '([^=]+)=([^:]+:)'\n"\
   "  echo \$PATH | $0 -rn '([^:]+):'\n"\
+  "  env | ./colout '^([^=]+)=([^:]+)$|^([^=]+)=' y g y -- -cr '^([^=]+)=([^:]+):?' -- -c '.*' b\n"\
   "  echo 'Progress [########################] 100%' | $0 -rn '#' hidden,bg=Rainbow\n"\
+  "  ls -l | $0 -t perm\n"\
 >&2
 }
 
@@ -90,8 +116,10 @@ parse_cli () {
   user_expr=''
   user_scale_expr=''
   awk_user_funcs=''
+  awk_user_variables=''
+  esc_reset=' "\x1B[0m"'
 
-  while getopts ':s:u:x:X:f:hlrcankpo' optname
+  while getopts ':s:u:x:X:f:v:t:hlrcankRNpo' optname
   do
     case "$optname" in
       l) line_mode=1 ;;
@@ -99,12 +127,16 @@ parse_cli () {
       r) again_mode=1 ;;
       n) loop_color_mode=1 ;;
       k) keep_color=1 ;;
+      R) esc_reset='' ;;
+      N) awk_opt+=' -N' ;;
       c) continue_mode=1 ;;
       p) print_mode=1 ;;
       x) user_expr="$OPTARG" ;;
       X) user_scale_expr="$OPTARG" ;;
       f) awk_user_funcs="$OPTARG" ;;
-      o) awk_opt="-o" ;;
+      v) awk_user_variables="$OPTARG" ;;
+      o) awk_opt+=' -o' ;;
+      t) exec "$0"_"$OPTARG" ;;
       s)
         IFS=',' read min_scale max_scale <<<"$OPTARG"
         if [ -z "$max_scale" ] ; then
@@ -124,7 +156,15 @@ parse_cli () {
         ;;
       u) units="$OPTARG" ; scale_mode=1 ;;
       \?) break ;;
-      :) echo "Option -$OPTARG requires an argument." >&2 ;  usage ; exit 1 ;;
+      :)
+        if [ $OPTARG = t ] ; then
+          ls -1 "$0"_*
+          exit 0
+        fi
+        echo "Option -$OPTARG requires an argument." >&2
+        usage
+        exit 1
+        ;;
       h) usage ; exit 1 ;;
     esac
   done
@@ -148,7 +188,7 @@ if [ $line_mode = 1 ] ; then
     pattern+="s/^/\x1b0[${1}m/;s/$/\x1b[0m/"
   }
   run(){
-    [ -z "$pattern" ] && append_color {31..37}
+    [ -z "$pattern" ] && set_default_colors
     local cmd
     [ $print_mode = 1 ] && cmd='echo' || cmd='exec'
     $cmd sed "$pattern" ;
@@ -172,13 +212,13 @@ else
   v_compute='*nb_colors'$ireg'/(dscale*'${#units}')'
   mk_rgx_block() {
     rgx=${rgx//\//\\/}
-    [ -z "$colors" ] && append_color {31..37}
+    [ -z "$colors" ] && set_default_colors
 
     local rep_start=''
     local rep_stop=''
     if [ $again_mode = 1 ] ; then
       rep_start='do {'
-      rep_stop='$0 = substr($0, RSTART+RLENGTH) } while (match($0, /'"$rgx"'/, a))'
+      rep_stop='if (RSTART+RLENGTH == 1) break; $0 = substr($0, RSTART+RLENGTH); } while (match($0, /'"$rgx"'/, a))'
     fi
 
     local a_i_color='"\x1B[" colors'$ireg'['
@@ -195,15 +235,15 @@ else
     elif [ ! -z "$user_scale_expr" ] ; then
       if [ -z "$units" ] ; then
         a_i_color+='uexpr'$ireg'(a[i])'$v_compute
-        awk_funcs+='function uexpr'$ireg'(v){return '"$user_expr"'}'
+        awk_funcs+='function uexpr'$ireg'(v){return int('"$user_scale_expr"')}'
       else
         a_i_color+='uexpr'$ireg'(a[i], '$s_i_unit')'$v_compute
-        awk_funcs+='function uexpr'$ireg'(v,u){return '"$user_expr"'}'
+        awk_funcs+='function uexpr'$ireg'(v,u){return int('"$user_scale_expr"')}'
       fi
     elif [ ! -z "$units" ] ; then
       a_i_color+='get_icol'$ireg'(a[i]-'$min_scale', '$s_i_unit')'
       awk_funcs+='function get_icol'$ireg'(v,u){
-        istart=int((nb_colors'$ireg'/'${#units}')*(u>0?u-1:0))
+        istart=nb_colors'$ireg'*(u==0?0:u-1)/'${#units}'
         return int(istart+(v'$v_compute'))}'
     elif [ $scale_mode = 1 ] ; then
       a_i_color+='int((a[i] - '$min_scale')*nb_colors'$ireg'/dscale)'
@@ -212,7 +252,7 @@ else
     else
       a_i_color+='ic%nb_colors'$ireg
     fi
-    a_i_color+='] "m" a[i] "\x1B[0m"'
+    a_i_color+='] "m" a[i]'$esc_reset
 
     awk_begin_script+="$colors"' nb_colors'$ireg'='$icol';'
     [ $continue_mode = 0 ] && [ $ireg != 0 ] && awk_script+='else '
@@ -259,7 +299,7 @@ else
     [ $print_mode = 1 ] && cmd='echo' || cmd='exec'
     $cmd awk $awk_opt "$awk_funcs
       $awk_user_funcs"'
-      BEGIN { '"$awk_begin_script"' }
+      BEGIN { '"$awk_user_variables;$awk_begin_script"' }
       { s="";'"$pre_awk_script $awk_script $post_awk_script"' print s $0 }'
   }
 fi
@@ -323,27 +363,65 @@ declare -A style_names=(
   [bge8]=100 [bge9]=101 [bge10]=102 [bge11]=103 [bge12]=104 [bge13]=105 [bge14]=106 [bge15]=107
 )
 
+declare -A colormap_cmds=(
+  [rainbow]='append_colors_name m b c g y r'
+  [Rainbow]='append_colors_256 92 93 57 21 27 33 39 45 51 50 49 48 47 46 82 118 154 190 226 220 214 208 202 196'
+  # Cubehelix rainbow
+  [rainbow2]='append_colors_rgb 76;110;219 47;150;223 27;190;202 29;222;162 58;241;120 111;246;91 175;239;90 207;203;53 243;160;47 255;119;70 255;86;110 237;67;149 190;60;174'
+  [Rainbow2]='append_colors_rgb 101;77;191 89;99;208 76;110;219 61;130;225 47;150;223 35;171;215 27;190;202 25;208;183 29;222;162 40;234;140 58;241;120 82;245;102 111;246;91 143;243;86 175;239;90 189;223;68 207;203;53 226;182;46 243;160;47 255;139;56 255;119;70 255;101;89 255;86;110 254;75;130 237;67;149 216;62;164 190;60;174 163;60;178 135;61;177 109;63;169'
+  [spectrum]='append_colors_name m b c w g y r'
+  [Spectrum]='append_colors_256 91 92 56 57 21 27 26 32 31 37 36 35 41 40 41 77 83 84 120 121 157 194 231 254 255 231 230 229 228 227 226 220 214 208 202 196'
+  [set2]='append_colors_rgb 102;194;165 250;141;98 141;159;202 230;138;195 166;216;83 254;216;47 228;195;148 179;179;179'
+  [tab10]='append_colors_rgb 31;119;180 255;127;14 44;160;44 214;39;40 148;103;189 140;86;75 227;119;194 127;127;127 188;189;34 23;190;207'
+  [brewer]='append_colors_rgb 166;206;227 31;120;180 178;223;138 51;160;44 251;154;153 227;26;28 253;191;111 255;127;0 202;178;214 106;61;154'
+  [excel]='append_colors_rgb 54;94;150 152;51;52 119;151;61 93;67;124 54;134;159 209;112;47 129;151;197 196;127;128 172;196;132 152;135;176'
+  [reds]='append_colors_rgb 255;229;229 229;183;183 204;137;137 178;91;91 153;45;45 128;0;0'
+  [Reds]='append_colors_rgb 255;193;193 253;189;189 251;186;186 249;182;182 247;179;179 245;175;175 243;171;171 241;168;168 239;164;164 237;161;161 235;157;157 233;153;153 231;150;150 229;146;146 227;143;143 225;139;139 223;135;135 221;132;132 219;128;128 217;125;125 215;121;121 213;117;117 211;114;114 209;110;110 207;107;107'
+  [greens]='append_colors_rgb 229;255;229 183;229;183 137;204;137 91;178;91 45;153;45 0;128;0'
+  [Greens]='append_colors_rgb 193;255;193 189;253;189 186;251;186 182;249;182 179;247;179 175;245;175 171;243;171 168;241;168 164;239;164 161;237;161 157;235;157 153;233;153 150;231;150 146;229;146 143;227;143 139;225;139 135;223;135 132;221;132 128;219;128 125;217;125 121;215;121 117;213;117 114;211;114 110;209;110 107;207;107'
+  [blues]='append_colors_rgb 229;229;255 183;183;229 137;137;204 91;91;178 45;45;153 0;0;128'
+  [Blues]='append_colors_rgb 193;193;255 189;189;253 186;186;251 182;182;249 179;179;247 175;175;245 171;171;243 168;168;241 164;164;239 161;161;237 157;157;235 153;153;233 150;150;231 146;146;229 143;143;227 139;139;225 135;135;223 132;132;221 128;128;219 125;125;217 121;121;215 117;117;213 114;114;211 110;110;209 107;107;207'
+  [purples]='append_colors_rgb 237;209;203 224;177;180 207;154;163 183;116;149 154;91;136 118;68;118'
+  [Purples]='append_colors_rgb 237;209;203 234;200;196 230;190;188 227;181;183 223;172;177 218;162;172 212;153;167 207;144;162 200;135;158 194;127;154 187;119;151 178;111;147 169;103;143 161;96;139 150;88;134'
+  [darkpurples]='append_colors_rgb 109;79;114 90;68;94 71;56;74 52;45;54 34;34;34'
+  [navy]='append_colors_rgb 235;247;249 187;229;254 160;211;219 123;193;204 85;175;189 48;157;174'
+  [br]='append_colors_rgb 63;127;147 129;167;181 184;209;217 242;242;242 232;192;181 213;138;118 194;85;57'
+  [bR]='append_colors_rgb 41;113;177 107;172;208 194;221;255 247;246;246 250;204;180 228;128;101 185;39;50'
+  [default]='append_colors 31 32 33 34 35 36 37'
+  [Default]='append_colors 31 32 33 34 35 36 37'
+)
 
 cmd='38'
 prefix='fg'
 
-append_color_name() {
-  local c
-  for c in $@ ; do
-    append "$s;${style_names[$prefix$c]}"
+append_colors_name() {
+  while [ $# != 1 ] ; do
+    append "$s;${style_names[$prefix$1]}"
+    shift
   done
+  s+=";${style_names[$prefix$1]}"
 }
-append_color256() {
-  local c
-  for c in $@ ; do
-    append "$s;$cmd;5;$c"
+append_colors() {
+  local scmd="$s;$cmd;"
+  while [ $# != 1 ] ; do
+    append "$scmd$1"
+    shift
   done
+  s+=";$cmd;$1"
 }
-append_color() {
-  local c
-  for c in $@ ; do
-    append "$s;$cmd;$c"
-  done
+append_colors_256() {
+  cmd+=';5'
+  append_colors "$@"
+  cmd=${cmd:0:-2}
+}
+append_colors_rgb() {
+  cmd+=';2'
+  append_colors "$@"
+  cmd=${cmd:0:-2}
+}
+set_default_colors() {
+  append_colors {31..37}
+  append "$s"
 }
 
 while [ $# != 0 ] ; do
@@ -396,19 +474,28 @@ while [ $# != 0 ] ; do
         # 256 colors
         elif [[ "$style" =~ ^'25'[0-5]$|^[0-2][0-4][0-9]$|^[0-9][0-9]$ ]] ; then
           s+=";$cmd;5;${style:1}"
+        # rgb888 decimal color (123/123/123)
+        elif [[ "$style" =~ ^[0-9]+'/'[0-9]+'/'[0-9]+$ ]] ; then
+          s+=";$cmd;2;${style//\//;}"
         else
-          case "$style" in
-            rainbow) append_color_name \
-              m b c g y ; s+=";${style_names[${prefix}r]}" ;;
-            Rainbow) append_color256 \
-              92 93 57 21 27 33 39 45 51 50 49 48 47 46 82 118 154 190 226 220 214 208 202 ; s+="$s;$cmd;5;196" ;;
-            spectrum) append_color_name \
-              m b c w g y ; s+=";${style_names[${prefix}r]}" ;;
-            Spectrum) append_color256 \
-              91 92 56 57 21 27 26 32 31 37 36 35 41 40 41 77 83 84 120 121 157 194 231 254 255 231 230 229 228 227 226 220 214 208 202 ; s+="$s;$cmd;5;196" ;;
-            default|Default) append_color {31..36} ; s+="$s;$cmd;37" ;;
-            *) echo "Invalid '$style' color." >&2 ; exit 5 ;;
-          esac
+          mapcmd=${colormap_cmds[$style]}
+          if [ ! "$mapcmd" ] && [ "${style:0:2}" = 'r:' ]; then
+            mapcmd=${colormap_cmds[${style:2}]}
+            if [ ! "$mapcmd" ] ; then
+              echo "Invalid '$style' color." >&2
+              exit 5
+            fi
+
+            # reverse order colormap
+            read ff comps <<<"$mapcmd"
+            mapcmd=''
+            for comp in $comps ; do
+              mapcmd="$comp $mapcmd"
+            done
+            mapcmd="$ff $mapcmd"
+          fi
+
+          $mapcmd
         fi
       else
         s+=";$v"
