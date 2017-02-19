@@ -6,7 +6,17 @@ echo -ne "Add colors to a text stream in your terminal.\n\n"\
 "$0 -t [theme]\n"\
 "$0 -l [COLORS_AND_STYLES...]\n"\
 "$0 [-rcankpo] [-s scale] [-u units] [-x awk_expr] [-X awk_expr] [-f awk_func] PATTERN [COLORS_AND_STYLES...] [-- ...]\n\n"\
-" -t [theme]  List or apply\n\n"\
+"PATTERN\n  Regular expression.\n\n"\
+"COLORS_AND_STYLES\n"\
+"  - A style name\n"\
+"  - A color name\n"\
+"  - A colormap name\n"\
+"  - A number in [0…255]\n"\
+"  - 'e' followed by a number in [0…15]\n"\
+"  - '#' followed by 3 or 6 hexadecimal values\n"\
+"  - 'bg'\n"\
+"  - Or a comma-separated list (or '=') of those values.\n\n"\
+" -t [theme]  List or apply. (load '\${COLOUT_PREFIX_PATH:-\${0}_}\${theme}')\n\n"\
 " -l  (line) Colors each lines\n\n"\
 " -r  (repeat/again) Apply PATTERN until there is no more matching.\n\n"\
 " -a  (all) Loop on all PATTERN until there is no more matching.\n\n"\
@@ -84,8 +94,8 @@ echo -ne "Add colors to a text stream in your terminal.\n\n"\
 " rgb888 color:\n   Decimal triplet: [0-9]+/[0-9]+/[0-9]+ (ex: '123/213/42')\n\n"\
 " rgb888 color:\n   Hexadecimal triplet: #[0-9a-fA-F]{6} (ex: '#22fa44')\n\n"\
 " rgb444 color:\n   Hexadecimal triplet: #[0-9a-fA-F]{3}, (ex: '#ae3')\n\n"\
-" 256 colors:\n   {0..255}\n\n"\
-" ANSI/Escape color:\n   e{0..15}\n\n"\
+" 256 colors:\n   A number in [0…255]\n\n"\
+" ANSI/Escape color:\n   'e' followed by a number in [0…15] (ex: e3)\n\n"\
 " background prefix:\n   bg=\n\n"\
 " example:\n"\
   "  echo abcdefgh | $0 '(..)..(..)' red,bg=#8f10e5,italic bg=yellow,k\n"\
@@ -136,7 +146,7 @@ parse_cli () {
       f) awk_user_funcs="$OPTARG" ;;
       v) awk_user_variables="$OPTARG" ;;
       o) awk_opt+=' -o' ;;
-      t) exec "$0"_"$OPTARG" ;;
+      t) exec "${COLOUT_PREFIX_PATH:-${0}_}$OPTARG" ;;
       s)
         IFS=',' read min_scale max_scale <<<"$OPTARG"
         if [ -z "$max_scale" ] ; then
@@ -158,7 +168,7 @@ parse_cli () {
       \?) break ;;
       :)
         if [ $OPTARG = t ] ; then
-          ls -1 "$0"_*
+          ls -1 "${COLOUT_PREFIX_PATH:-${0}_}"*
           exit 0
         fi
         echo "Option -$OPTARG requires an argument." >&2
@@ -185,7 +195,7 @@ if [ $line_mode = 1 ] ; then
   pattern=''
   append(){
     [ ! -z "$pattern" ] && pattern+=';n;'
-    pattern+="s/^/\x1b0[${1}m/;s/$/\x1b[0m/"
+    pattern+="s/^/\x1b[${1}m/;s/$/\x1b[0m/"
   }
   run(){
     [ -z "$pattern" ] && set_default_colors
