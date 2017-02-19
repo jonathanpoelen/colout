@@ -48,7 +48,7 @@ echo -ne "Add colors to a text stream in your terminal.\n\n"\
   "  u[nderline]\n"\
   "  blink,l\n"\
   "  reverse,v\n"\
-  "  [h]idden\n\n"\
+  "  h[idden]\n\n"\
 " named colors (Note: an uppercase character is considered to be bold)\n"\
   "  default,none\n"\
   "  [blac]k\n"\

@@ -71,7 +71,7 @@ COLORS_AND_STYLES
    u[nderline]
    blink,l
    reverse,v
-   [h]idden
+   h[idden]
 
  named colors (Note: an uppercase character is considered to be bold)
    default,none
