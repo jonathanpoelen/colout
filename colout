@@ -5,7 +5,7 @@ echo -ne "Add colors to a text stream in your terminal.\n\n"\
 "$0 -h\n"\
 "$0 -t [theme]\n"\
 "$0 -l [COLORS_AND_STYLES...]\n"\
-"$0 [-rcankpo] [-s scale] [-u units] [-x awk_expr] [-X awk_expr] [-f awk_func] PATTERN [COLORS_AND_STYLES...] [-- ...]\n\n"\
+"$0 [-rcankRNpo] [-s scale] [-u units] [-x awk_expr] [-X awk_expr] [-f awk_func] PATTERN [COLORS_AND_STYLES...] [-- ...]\n\n"\
 "PATTERN\n  Regular expression.\n\n"\
 "COLORS_AND_STYLES\n"\
 "  - A style name\n"\
@@ -17,7 +17,7 @@ echo -ne "Add colors to a text stream in your terminal.\n\n"\
 "  - 'bg'\n"\
 "  - Or a comma-separated list (or '=') of those values.\n\n"\
 " -t [theme]  List or apply. (load '\${COLOUT_PREFIX_PATH:-\${0}_}\${theme}')\n\n"\
-" -l  (line) Colors each lines\n\n"\
+" -l  (line) Colors each lines.\n\n"\
 " -r  (repeat/again) Apply PATTERN until there is no more matching.\n\n"\
 " -a  (all) Loop on all PATTERN until there is no more matching.\n\n"\
 " -c  (continue) Try PATTERN even if previous ones match.\n\n"\
