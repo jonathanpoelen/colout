@@ -179,7 +179,10 @@ parse_cli () {
     esac
   done
 
-  [ $keep_color = 0 ] && colors=''
+  if [ $keep_color = 0 ] ; then
+    colors=''
+    ((++icreg))
+  fi
 }
 
 parse_cli "$@"
@@ -207,19 +210,20 @@ else
   rgx="$1"
   shift
   icol=0
-  ireg=0
+  icreg=0
   colors=''
   append(){
-    colors+="colors$ireg[$icol]=\"$1\";"
+    colors+="colors$icreg[$icol]=\"$1\";"
     ((++icol))
   }
 
   awk_script=''
   awk_begin_script=''
   awk_funcs=''
-  [ $scale_mode = 1 ] && awk_begin_script="dscale=$max_scale-$min_scale;"
+  ireg=0
+  [ $scale_mode = 1 ] && awk_begin_script="dscale$ireg=$max_scale-$min_scale+1;"
   s_i_unit='index("'$units'",substr(a[i], length(a[i]),1))'
-  v_compute='*nb_colors'$ireg'/(dscale*'${#units}')'
+  v_compute='*nb_colors'$icreg'/(dscale'$ireg'*'${#units}')'
   mk_rgx_block() {
     rgx=${rgx//\//\\/}
     [ -z "$colors" ] && set_default_colors
@@ -234,15 +238,15 @@ else
     if [ $icol = 1 ] ; then
       local a_i_color='"\x1B['$s'm" a[i]'$esc_reset
     else
-      local a_i_color='"\x1B[" colors'$ireg'['
+      local a_i_color='"\x1B[" colors'$icreg'['
       if [ ! -z "$user_expr" ] ; then
         local uexpr='{r=int('"$user_expr"')
-          return r<0?0:(r>=nb_colors'$ireg'?nb_colors'$ireg'-1:r)}'
+          return r<0?0:(r>=nb_colors'$icreg'?nb_colors'$icreg'-1:r)}'
         if [ -z "$units" ] ; then
-          a_i_color+='uexpr'$ireg'(a[i], nb_colors'$ireg')'
+          a_i_color+='uexpr'$ireg'(a[i], nb_colors'$icreg')'
           awk_funcs+='function uexpr'$ireg'(v,n)'$uexpr
         else
-          a_i_color+='uexpr'$ireg'(a[i], '$s_i_unit', nb_colors'$ireg')'
+          a_i_color+='uexpr'$ireg'(a[i], '$s_i_unit', nb_colors'$icreg')'
           awk_funcs+='function uexpr'$ireg'(v,u,n)'$uexpr
         fi
       elif [ ! -z "$user_scale_expr" ] ; then
@@ -256,17 +260,19 @@ else
       elif [ ! -z "$units" ] ; then
         a_i_color+='get_icol'$ireg'(a[i]-'$min_scale', '$s_i_unit')'
         awk_funcs+='function get_icol'$ireg'(v,u){
-          istart=nb_colors'$ireg'*(u==0?0:u-1)/'${#units}'
+          istart=nb_colors'$icreg'*(u==0?0:u-1)/'${#units}'
           return int(istart+(v'$v_compute'))}'
       elif [ $scale_mode = 1 ] ; then
-        a_i_color+='int((a[i] - '$min_scale')*nb_colors'$ireg'/dscale)'
+        a_i_color+='int((a[i] - '$min_scale')*nb_colors'$icreg'/dscale'$ireg')'
       elif [ $loop_color_mode = 1 ] ; then
-        a_i_color+='icol++%nb_colors'$ireg
+        a_i_color+='icol++%nb_colors'$icreg
       else
-        a_i_color+='ic%nb_colors'$ireg
+        a_i_color+='ic%nb_colors'$icreg
       fi
       a_i_color+='] "m" a[i]'$esc_reset
-      awk_begin_script+="$colors"' nb_colors'$ireg'='$icol';'
+      if [ $keep_color != 1 ] || [ $ireg = 0 ] ; then
+        awk_begin_script+="$colors"' nb_colors'$icreg'='$icol';'
+      fi
     fi
 
     [ $continue_mode = 0 ] && [ $ireg != 0 ] && awk_script+='else '
