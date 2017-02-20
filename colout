@@ -231,40 +231,44 @@ else
       rep_stop='if (RSTART+RLENGTH == 1) break; $0 = substr($0, RSTART+RLENGTH); } while (match($0, /'"$rgx"'/, a))'
     fi
 
-    local a_i_color='"\x1B[" colors'$ireg'['
-    if [ ! -z "$user_expr" ] ; then
-      local uexpr='{r=int('"$user_expr"')
-        return r<0?0:(r>=nb_colors'$ireg'?nb_colors'$ireg'-1:r)}'
-      if [ -z "$units" ] ; then
-        a_i_color+='uexpr'$ireg'(a[i], nb_colors'$ireg')'
-        awk_funcs+='function uexpr'$ireg'(v,n)'$uexpr
-      else
-        a_i_color+='uexpr'$ireg'(a[i], '$s_i_unit', nb_colors'$ireg')'
-        awk_funcs+='function uexpr'$ireg'(v,u,n)'$uexpr
-      fi
-    elif [ ! -z "$user_scale_expr" ] ; then
-      if [ -z "$units" ] ; then
-        a_i_color+='uexpr'$ireg'(a[i])'$v_compute
-        awk_funcs+='function uexpr'$ireg'(v){return int('"$user_scale_expr"')}'
-      else
-        a_i_color+='uexpr'$ireg'(a[i], '$s_i_unit')'$v_compute
-        awk_funcs+='function uexpr'$ireg'(v,u){return int('"$user_scale_expr"')}'
-      fi
-    elif [ ! -z "$units" ] ; then
-      a_i_color+='get_icol'$ireg'(a[i]-'$min_scale', '$s_i_unit')'
-      awk_funcs+='function get_icol'$ireg'(v,u){
-        istart=nb_colors'$ireg'*(u==0?0:u-1)/'${#units}'
-        return int(istart+(v'$v_compute'))}'
-    elif [ $scale_mode = 1 ] ; then
-      a_i_color+='int((a[i] - '$min_scale')*nb_colors'$ireg'/dscale)'
-    elif [ $loop_color_mode = 1 ] ; then
-      a_i_color+='icol++%nb_colors'$ireg
+    if [ $icol = 1 ] ; then
+      local a_i_color='"\x1B['$s'm" a[i]'$esc_reset
     else
-      a_i_color+='ic%nb_colors'$ireg
+      local a_i_color='"\x1B[" colors'$ireg'['
+      if [ ! -z "$user_expr" ] ; then
+        local uexpr='{r=int('"$user_expr"')
+          return r<0?0:(r>=nb_colors'$ireg'?nb_colors'$ireg'-1:r)}'
+        if [ -z "$units" ] ; then
+          a_i_color+='uexpr'$ireg'(a[i], nb_colors'$ireg')'
+          awk_funcs+='function uexpr'$ireg'(v,n)'$uexpr
+        else
+          a_i_color+='uexpr'$ireg'(a[i], '$s_i_unit', nb_colors'$ireg')'
+          awk_funcs+='function uexpr'$ireg'(v,u,n)'$uexpr
+        fi
+      elif [ ! -z "$user_scale_expr" ] ; then
+        if [ -z "$units" ] ; then
+          a_i_color+='uexpr'$ireg'(a[i])'$v_compute
+          awk_funcs+='function uexpr'$ireg'(v){return int('"$user_scale_expr"')}'
+        else
+          a_i_color+='uexpr'$ireg'(a[i], '$s_i_unit')'$v_compute
+          awk_funcs+='function uexpr'$ireg'(v,u){return int('"$user_scale_expr"')}'
+        fi
+      elif [ ! -z "$units" ] ; then
+        a_i_color+='get_icol'$ireg'(a[i]-'$min_scale', '$s_i_unit')'
+        awk_funcs+='function get_icol'$ireg'(v,u){
+          istart=nb_colors'$ireg'*(u==0?0:u-1)/'${#units}'
+          return int(istart+(v'$v_compute'))}'
+      elif [ $scale_mode = 1 ] ; then
+        a_i_color+='int((a[i] - '$min_scale')*nb_colors'$ireg'/dscale)'
+      elif [ $loop_color_mode = 1 ] ; then
+        a_i_color+='icol++%nb_colors'$ireg
+      else
+        a_i_color+='ic%nb_colors'$ireg
+      fi
+      a_i_color+='] "m" a[i]'$esc_reset
+      awk_begin_script+="$colors"' nb_colors'$ireg'='$icol';'
     fi
-    a_i_color+='] "m" a[i]'$esc_reset
 
-    awk_begin_script+="$colors"' nb_colors'$ireg'='$icol';'
     [ $continue_mode = 0 ] && [ $ireg != 0 ] && awk_script+='else '
     awk_script+='
     if (match($0, /'"$rgx"'/, a)) {
