@@ -115,7 +115,7 @@ COLORS_AND_STYLES
    [r:]darkpurples
    [r:]navy
    [r:]br
-   [r:]BR
+   [r:]br2
 
  rgb888 color:
    Decimal triplet: [0-9]+/[0-9]+/[0-9]+ (ex: '123/213/42')
