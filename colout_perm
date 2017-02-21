@@ -1,7 +1,9 @@
 #!/usr/bin/awk -f
-# mk_theme perm \(\[-d\]\)\(\[-r\]\)\(\[-w\]\)\(\[-x\]\)\(\[-r\]\)\(\[-w\]\)\(\[-x\]\)\(\[-r\]\)\(\[-w\]\)\(\[-x\]\) b g, g,i g,o y, y,i y,o r, r,i r,o
 
-# gawk profile, created Sun Feb 19 22:34:58 2017
+# ./mk_theme.sh perm \
+# '([-d])([-r])([-w])([-x])([-r])([-w])([-x])([-r])([-w])([-x])' 'b' 'g,' 'g,i' 'g,o' 'y,' 'y,i' 'y,o' 'r,' 'r,i' 'r,o'
+
+# gawk profile, created Mon Feb 20 23:47:29 2017
 
 # BEGIN rule(s)
 
