@@ -110,6 +110,10 @@ echo -ne "Add colors to a text stream in your terminal.\n\n"\
 >&2
 }
 
+prefix_theme_path() {
+  echo "${COLOUT_PREFIX_PATH:-$(readlink -f "$0")_}"
+}
+
 print_mode=0
 all_mode=0
 
@@ -146,7 +150,7 @@ parse_cli () {
       f) awk_user_funcs="$OPTARG" ;;
       v) awk_user_variables="$OPTARG" ;;
       o) awk_opt+=' -o' ;;
-      t) exec "${COLOUT_PREFIX_PATH:-${0}_}$OPTARG" ;;
+      t) exec "$(prefix_theme_path)$OPTARG" ;;
       s)
         IFS=',' read min_scale max_scale <<<"$OPTARG"
         if [ -z "$max_scale" ] ; then
@@ -168,7 +172,11 @@ parse_cli () {
       \?) break ;;
       :)
         if [ $OPTARG = t ] ; then
-          ls -1 "${COLOUT_PREFIX_PATH:-${0}_}"*
+          local prefix=$(prefix_theme_path)
+          local len=${#prefix}
+          for f in "$prefix"* ; do
+            echo ${f:$len}
+          done
           exit 0
         fi
         echo "Option -$OPTARG requires an argument." >&2
