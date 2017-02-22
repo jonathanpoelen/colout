@@ -230,6 +230,7 @@ else
   awk_funcs=''
   ireg=0
   s_i_unit='index("'$units'",substr(a[i], length(a[i]),1))'
+  add_getdigits=0
   mk_rgx_block() {
     rgx=${rgx//\//\\/}
     [ -z "$colors" ] && set_default_colors
@@ -248,6 +249,7 @@ else
       if [ ! -z "$user_expr" ] ; then
         local uexpr='{r=int('"$user_expr"')
           return r<0?0:(r>=nb_colors'$icreg'?nb_colors'$icreg'-1:r)}'
+        add_getdigits=1
         if [ -z "$units" ] ; then
           a_i_color+='uexpr'$ireg'(getdigits(a[i]), nb_colors'$icreg')'
           awk_funcs+='function uexpr'$ireg'(v,n)'$uexpr
@@ -271,6 +273,7 @@ else
           istart=nb_colors'$icreg'*(u==0?0:u-1)/'${#units}'
           return int(istart+(v'$v_compute'))}'
       elif [ $scale_mode = 1 ] ; then
+        add_getdigits=1
         a_i_color+='int((getdigits(a[i]) - '$min_scale')*nb_colors'$icreg'/dscale'$ireg')'
       elif [ $loop_color_mode = 1 ] ; then
         a_i_color+='icol++%nb_colors'$icreg
@@ -326,9 +329,8 @@ else
     fi
     local cmd
     [ $print_mode = 1 ] && cmd='echo' || cmd='exec'
-    $cmd awk $awk_opt 'function getdigits(s) { sub(/[^0-9]*/,"",s); return s}'"
-      $awk_funcs
-      $awk_user_funcs"'
+    [ $add_getdigits = 1 ] && awk_funcs+='function getdigits(s) { sub(/[^0-9]*/,"",s); return s}'
+    $cmd awk $awk_opt "$awk_funcs $awk_user_funcs"'
       BEGIN { '"$awk_user_variables;$awk_begin_script"' }
       { s="";'"$pre_awk_script $awk_script $post_awk_script"' print s $0 }'
   }
