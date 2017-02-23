@@ -5,7 +5,7 @@ echo -ne "Add colors to a text stream in your terminal.\n\n"\
 "$0 -h\n"\
 "$0 -t [theme]\n"\
 "$0 -l [COLORS_AND_STYLES...]\n"\
-"$0 [-rcankRNpo] [-s scale] [-u units] [-x awk_expr] [-X awk_expr] [-f awk_func] PATTERN [COLORS_AND_STYLES...] [-- ...]\n\n"\
+"$0 [-rcankRNpo] [-s scale] [-S group_index] [-i group_indexes] [-I group_index] [-u units] [-x awk_expr] [-X awk_expr] [-f awk_func] PATTERN [COLORS_AND_STYLES...] [-- ...]\n\n"\
 "PATTERN\n  Regular expression.\n\n"\
 "COLORS_AND_STYLES\n"\
 "  - A style name\n"\
@@ -28,6 +28,9 @@ echo -ne "Add colors to a text stream in your terminal.\n\n"\
 " -p  (print) print awk/sed command.\n\n"\
 " -o  (optimize) See man awk -o/--optimize.\n\n"\
 " -s scale  'min,max' or 'max'. Apply colors linearly between min and max (0,100 by default).\n\n"\
+" -S group_index  Use this group to compute the interval value.\n\n"\
+" -i group_indexes  Ignore groups (space and comma-separated list).\n\n"\
+" -I group_index  Shortcut for '-S group_index -i group_index'.\n\n"\
 " -u units  Cuts the color range per unit.\n\n"\
 " -x awk_expr  An expression that returns the color index.\n"\
 "              'v' the extracted value\n"\
@@ -117,6 +120,13 @@ prefix_theme_path() {
 print_mode=0
 all_mode=0
 
+check_int() {
+  if [[ ! "$1" =~ ^[0-9]+$ ]] ; then
+    echo "$2 '$1' bad number format"
+    exit 1
+  fi
+}
+
 parse_cli () {
   line_mode=0
   scale_mode=0
@@ -127,13 +137,15 @@ parse_cli () {
   min_scale=0
   max_scale=100
   units=''
+  scale_idx=0
   user_expr=''
   user_scale_expr=''
   awk_user_funcs=''
   awk_user_variables=''
+  awk_ignore_matches=''
   esc_reset=' "\x1B[0m"'
 
-  while getopts ':s:u:x:X:f:v:t:hlrcankRNpo' optname
+  while getopts ':s:u:S:x:X:f:v:i:I:t:hlrcankRNpo' optname
   do
     case "$optname" in
       l) line_mode=1 ;;
@@ -149,8 +161,20 @@ parse_cli () {
       X) user_scale_expr="$OPTARG" ;;
       f) awk_user_funcs="$OPTARG" ;;
       v) awk_user_variables="$OPTARG" ;;
+      i) awk_ignore_matches+=" $OPTARG" ;;
       o) awk_opt+=' -o' ;;
       t) exec "$(prefix_theme_path)$OPTARG" ;;
+      S)
+        check_int "$OPTARG" "-S"
+        scale_idx="$OPTARG"
+        scale_mode=1
+        ;;
+      I)
+        awk_ignore_matches+=" $OPTARG"
+        check_int "$OPTARG" "-S"
+        scale_idx="$OPTARG"
+        scale_mode=1
+        ;;
       s)
         IFS=',' read min_scale max_scale <<<"$OPTARG"
         if [ -z "$max_scale" ] ; then
@@ -163,8 +187,7 @@ parse_cli () {
           "$max_scale" -lt "$min_scale"
         ]] ; then
           echo "-s $min_scale,$max_scale bad format"
-          usage
-          exit
+          exit 1
         fi
         scale_mode=1
         ;;
@@ -179,8 +202,8 @@ parse_cli () {
           done
           exit 0
         fi
-        echo "Option -$OPTARG requires an argument." >&2
         usage
+        echo "Option -$OPTARG requires an argument." >&2
         exit 1
         ;;
       h) usage ; exit 1 ;;
@@ -242,6 +265,10 @@ else
       rep_stop='if (RSTART+RLENGTH == 1) break; $0 = substr($0, RSTART+RLENGTH); } while (match($0, /'"$rgx"'/, a))'
     fi
 
+    local awk_ic_var1=''
+    local awk_ic_var2=''
+    local awk_pre_i_loop=''
+
     if [ $icol = 1 ] ; then
       local a_i_color='"\x1B['$s'm" a[i]'$esc_reset
     else
@@ -272,6 +299,10 @@ else
         awk_funcs+='function get_icol'$ireg'(v,u){
           istart=nb_colors'$icreg'*(u==0?0:u-1)/'${#units}'
           return int(istart+(v'$v_compute'))}'
+      elif [ $scale_idx != 0 ] ; then
+        add_getdigits=1
+        a_i_color+='icol'
+        awk_pre_i_loop+='icol=int((getdigits(a['$scale_idx']) - '$min_scale')*nb_colors'$icreg'/dscale'$ireg')'
       elif [ $scale_mode = 1 ] ; then
         add_getdigits=1
         a_i_color+='int((getdigits(a[i]) - '$min_scale')*nb_colors'$icreg'/dscale'$ireg')'
@@ -279,6 +310,8 @@ else
         a_i_color+='icol++%nb_colors'$icreg
       else
         a_i_color+='ic%nb_colors'$icreg
+        awk_ic_var1='ic=0'
+        awk_ic_var2='ic=i-1'
       fi
       a_i_color+='] "m" a[i]'$esc_reset
       if [ $keep_color != 1 ] || [ $ireg = 0 ] ; then
@@ -287,6 +320,14 @@ else
     fi
     [ $scale_mode = 1 ] && awk_begin_script+="dscale$ireg=$max_scale-$min_scale+1;"
 
+    local filter_i=''
+    if [ ! -z "$awk_ignore_matches" ] ; then
+      IFS=' ,'; while read l ; do
+        check_int "$l" "-i"
+        filter_i+='if(i == '$l') continue;'
+      done <<<"$awk_ignore_matches"
+    fi
+
     [ $continue_mode = 0 ] && [ $ireg != 0 ] && awk_script+='else '
     awk_script+='
     if (match($0, /'"$rgx"'/, a)) {
@@ -294,19 +335,20 @@ else
       n = length(a)/3
       if (n == 1) {
         i = 0
-        ic= 0
+        '"$awk_ic_var1"'
         s = s substr($0, 0, RSTART-1) '"$a_i_color"'
       }
       else {
         c = ""
         p = 1
-        for (i=1; i<n; ++i) {
+        '"$awk_pre_i_loop"'
+        for (i=1; i<n; ++i) { '"$filter_i"'
           start=a[i,"start"]
           if (start == null) {
             ++n;
             continue
           }
-          ic= i-1
+          '"$awk_ic_var1"'
           s = s substr($0, p, start-p) '"$a_i_color"'
           p = start+a[i,"length"]
         }

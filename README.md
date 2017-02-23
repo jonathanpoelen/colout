@@ -7,7 +7,7 @@ Inspired by http://nojhan.github.com/colout/
 ./colout -h
 ./colout -t [theme]
 ./colout -l [COLORS_AND_STYLES...]
-./colout [-rcankRNpo] [-s scale] [-u units] [-x awk_expr] [-X awk_expr] [-f awk_func] PATTERN [COLORS_AND_STYLES...] [-- ...]
+./colout [-rcankRNpo] [-s scale] [-S group_index] [-i group_indexes] [-I group_index] [-u units] [-x awk_expr] [-X awk_expr] [-f awk_func] PATTERN [COLORS_AND_STYLES...] [-- ...]
 
 PATTERN
   Regular expression.
@@ -45,6 +45,12 @@ COLORS_AND_STYLES
  -o  (optimize) See man awk -o/--optimize.
 
  -s scale  'min,max' or 'max'. Apply colors linearly between min and max (0,100 by default).
+
+ -S group_index  Use this group to compute the interval value.
+
+ -i group_indexes  Ignore groups (space and comma-separated list).
+
+ -I group_index  Shortcut for '-S group_index -i group_index'.
 
  -u units  Cuts the color range per unit.
 
