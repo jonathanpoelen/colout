@@ -176,7 +176,7 @@ parse_cli () {
         scale_mode=1
         ;;
       s)
-        IFS=',' read min_scale max_scale <<<"$OPTARG"
+        IFS=$',= ' read min_scale max_scale <<<$OPTARG
         if [ -z "$max_scale" ] ; then
           max_scale="$min_scale"
           min_scale=0
@@ -322,10 +322,11 @@ else
 
     local filter_i=''
     if [ ! -z "$awk_ignore_matches" ] ; then
-      IFS=' ,'; while read l ; do
+      IFS=$',= ' read -a awk_ignore_matches <<<$awk_ignore_matches
+      for l in ${awk_ignore_matches[@]} ; do
         check_int "$l" "-i"
         filter_i+='if(i == '$l') continue;'
-      done <<<"$awk_ignore_matches"
+      done
     fi
 
     [ $continue_mode = 0 ] && [ $ireg != 0 ] && awk_script+='else '
@@ -527,7 +528,7 @@ while [ $# != 0 ] ; do
   fi
 
   # note: "bg,red" is equivalent to "bg=red"
-  IFS=',=' read -a styles <<<"$1"
+  IFS=$',= ' read -a styles <<<$1
   s=''
   for style in "${styles[@]}" ; do
     # background selector
