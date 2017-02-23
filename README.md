@@ -46,13 +46,13 @@ COLORS_AND_STYLES
 
  -s scale  'min,max' or 'max'. Apply colors linearly between min and max (0,100 by default).
 
- -S group_index  Use this group to compute the interval value.
+ -S group_index  Use this group to compute the interval value. Implies -s.
 
- -i group_indexes  Ignore groups (space and comma-separated list).
+ -i group_indexes  Ignore groups (space and comma-separated list). Implies -s.
 
- -I group_index  Shortcut for '-S group_index -i group_index'.
+ -I group_index  Shortcut for '-S group_index -i group_index'. Implies -s.
 
- -u units  Cuts the color range per unit.
+ -u units  Cuts the color range per unit. Implies -s.
 
  -x awk_expr  An expression that returns the color index.
               'v' the extracted value

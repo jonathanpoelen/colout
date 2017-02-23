@@ -28,10 +28,10 @@ echo -ne "Add colors to a text stream in your terminal.\n\n"\
 " -p  (print) print awk/sed command.\n\n"\
 " -o  (optimize) See man awk -o/--optimize.\n\n"\
 " -s scale  'min,max' or 'max'. Apply colors linearly between min and max (0,100 by default).\n\n"\
-" -S group_index  Use this group to compute the interval value.\n\n"\
-" -i group_indexes  Ignore groups (space and comma-separated list).\n\n"\
-" -I group_index  Shortcut for '-S group_index -i group_index'.\n\n"\
-" -u units  Cuts the color range per unit.\n\n"\
+" -S group_index  Use this group to compute the interval value. Implies -s.\n\n"\
+" -i group_indexes  Ignore groups (space and comma-separated list). Implies -s.\n\n"\
+" -I group_index  Shortcut for '-S group_index -i group_index'. Implies -s.\n\n"\
+" -u units  Cuts the color range per unit. Implies -s.\n\n"\
 " -x awk_expr  An expression that returns the color index.\n"\
 "              'v' the extracted value\n"\
 "              'n' the number of color\n"\
