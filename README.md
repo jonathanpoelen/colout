@@ -7,7 +7,7 @@ Inspired by http://nojhan.github.com/colout/
 ./colout -h
 ./colout -t [theme]
 ./colout -l [COLORS_AND_STYLES...]
-./colout [-rcankRNpo] [-s scale] [-S group_index] [-i group_indexes] [-I group_index] [-u units] [-x awk_expr] [-X awk_expr] [-f awk_func] PATTERN [COLORS_AND_STYLES...] [-- ...]
+./colout [-rcankRCeNpo] [-s scale] [-S group_index] [-i group_indexes] [-I group_index] [-u units] [-x awk_expr] [-X awk_expr] [-f awk_func] PATTERN [COLORS_AND_STYLES...] [-- ...]
 
 PATTERN
   Regular expression.
@@ -37,6 +37,10 @@ COLORS_AND_STYLES
  -k  (keep) Use the previous color map.
 
  -R  (no-reset) Do not reset colors.
+
+ -C  (color-continue) The current color becomes the normal color.
+
+ -e  (esc-reset) Reset the normal color.
 
  -N  (lc-numeric) Use the locale's decimal point character when parsing input data.
 
@@ -151,4 +155,5 @@ COLORS_AND_STYLES
    env | ./colout '^([^=]+)=([^:]+)$|^([^=]+)=' y g y -- -cr '^([^=]+)=([^:]+):?' -- -c '.*' b
    echo 'Progress [########################] 100%' | ./colout -rn '#' hidden,bg=Rainbow
    ls -l | ./colout -t perm
+   echo ' ab "abc\\tde\\"fg\\""hi' | colout -aC '"' r,o -- -cr '\\.' y,o -- -ec '"' r
 ```

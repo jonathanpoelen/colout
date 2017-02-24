@@ -5,7 +5,7 @@ echo -ne "Add colors to a text stream in your terminal.\n\n"\
 "$0 -h\n"\
 "$0 -t [theme]\n"\
 "$0 -l [COLORS_AND_STYLES...]\n"\
-"$0 [-rcankRNpo] [-s scale] [-S group_index] [-i group_indexes] [-I group_index] [-u units] [-x awk_expr] [-X awk_expr] [-f awk_func] PATTERN [COLORS_AND_STYLES...] [-- ...]\n\n"\
+"$0 [-rcankRCeNpo] [-s scale] [-S group_index] [-i group_indexes] [-I group_index] [-u units] [-x awk_expr] [-X awk_expr] [-f awk_func] PATTERN [COLORS_AND_STYLES...] [-- ...]\n\n"\
 "PATTERN\n  Regular expression.\n\n"\
 "COLORS_AND_STYLES\n"\
 "  - A style name\n"\
@@ -24,6 +24,8 @@ echo -ne "Add colors to a text stream in your terminal.\n\n"\
 " -n  (next) Each match passes to the next color.\n\n"\
 " -k  (keep) Use the previous color map.\n\n"\
 " -R  (no-reset) Do not reset colors.\n\n"\
+" -C  (color-continue) The current color becomes the normal color.\n\n"\
+" -e  (esc-reset) Reset the normal color.\n\n"\
 " -N  (lc-numeric) Use the locale's decimal point character when parsing input data.\n\n"\
 " -p  (print) print awk/sed command.\n\n"\
 " -o  (optimize) See man awk -o/--optimize.\n\n"\
@@ -110,7 +112,7 @@ echo -ne "Add colors to a text stream in your terminal.\n\n"\
   "  env | ./colout '^([^=]+)=([^:]+)$|^([^=]+)=' y g y -- -cr '^([^=]+)=([^:]+):?' -- -c '.*' b\n"\
   "  echo 'Progress [########################] 100%' | $0 -rn '#' hidden,bg=Rainbow\n"\
   "  ls -l | $0 -t perm\n"\
->&2
+  "  echo ' ab \"abc\\\\\\\tde\\\\\\\"fg\\\\\\\"\"hi' | colout -aC '\"' r,o -- -cr '\\\\\.' y,o -- -ec '\"' r\n"
 }
 
 prefix_theme_path() {
@@ -143,9 +145,11 @@ parse_cli () {
   awk_user_funcs=''
   awk_user_variables=''
   awk_ignore_matches=''
-  esc_reset=' "\x1B[0m"'
+  esc_reset=' esc_reset'
+  reset_normal_mode=0
+  reset_esc_mode=0
 
-  while getopts ':s:u:S:x:X:f:v:i:I:t:hlrcankRNpo' optname
+  while getopts ':s:u:S:x:X:f:v:i:I:t:hlrcankRCeNpo' optname
   do
     case "$optname" in
       l) line_mode=1 ;;
@@ -154,6 +158,8 @@ parse_cli () {
       n) loop_color_mode=1 ;;
       k) keep_color=1 ;;
       R) esc_reset='' ;;
+      e) reset_esc_mode=1 ;;
+      C) reset_normal_mode=1 ;;
       N) awk_opt+=' -N' ;;
       c) continue_mode=1 ;;
       p) print_mode=1 ;;
@@ -202,7 +208,7 @@ parse_cli () {
           done
           exit 0
         fi
-        usage
+        usage >&2
         echo "Option -$OPTARG requires an argument." >&2
         exit 1
         ;;
@@ -221,7 +227,7 @@ shift $(($OPTIND-1))
 
 #if [ $# = 0 ] && [ $line_mode = 0 ] && [ $scale_mode = 0 ] ; then
 if [ $# = 0 ] && [ $line_mode = 0 ] ; then
-  usage
+  usage >&2
   exit 1
 fi
 
@@ -249,7 +255,7 @@ else
   }
 
   awk_script=''
-  awk_begin_script=''
+  awk_begin_script='esc_reset="\x1B[0m";'
   awk_funcs=''
   ireg=0
   s_i_unit='index("'$units'",substr(a[i], length(a[i]),1))'
@@ -269,10 +275,19 @@ else
     local awk_ic_var2=''
     local awk_pre_i_loop=''
 
+    local set_normal=''
+    if [ $reset_normal_mode = 1 ] ; then
+      esc_reset=''
+      set_normal=';esc_reset="\x1B[" c "m"'
+    fi
+
+    [ $reset_esc_mode = 1 ] && rep_start+='esc_reset="\x1B[0m";'
+
     if [ $icol = 1 ] ; then
-      local a_i_color='"\x1B['$s'm" a[i]'$esc_reset
+      rep_start+='c="'$s'"'$set_normal
+      local a_i_color='"\x1B[" c "m" a[i]'$esc_reset
     else
-      local a_i_color='"\x1B[" colors'$icreg'['
+      local a_i_color='c=colors'$icreg'['
       if [ ! -z "$user_expr" ] ; then
         local uexpr='{r=int('"$user_expr"')
           return r<0?0:(r>=nb_colors'$icreg'?nb_colors'$icreg'-1:r)}'
@@ -310,10 +325,12 @@ else
         a_i_color+='icol++%nb_colors'$icreg
       else
         a_i_color+='ic%nb_colors'$icreg
-        awk_ic_var1='ic=0'
-        awk_ic_var2='ic=i-1'
+        awk_ic_var1='ic=0;'
+        awk_ic_var2='ic=i-1;'
       fi
-      a_i_color+='] "m" a[i]'$esc_reset
+      awk_ic_var1+=$a_i_color\]$set_normal
+      awk_ic_var2+=$a_i_color\]$set_normal
+      a_i_color='"\x1B[" c "m" a[i]'$esc_reset
       if [ $keep_color != 1 ] || [ $ireg = 0 ] ; then
         awk_begin_script+="$colors"' nb_colors'$icreg'='$icol';'
       fi
@@ -340,7 +357,6 @@ else
         s = s substr($0, 0, RSTART-1) '"$a_i_color"'
       }
       else {
-        c = ""
         p = 1
         '"$awk_pre_i_loop"'
         for (i=1; i<n; ++i) { '"$filter_i"'
@@ -349,7 +365,7 @@ else
             ++n;
             continue
           }
-          '"$awk_ic_var1"'
+          '"$awk_ic_var2"'
           s = s substr($0, p, start-p) '"$a_i_color"'
           p = start+a[i,"length"]
         }
@@ -507,7 +523,7 @@ while [ $# != 0 ] ; do
   # re-parse: "-- [-rg] [--] PATTERN [COLORS_AND_STYLES...]]..."
   if [ "$1" = '--' ] ; then
     if [ $line_mode = 1 ] ; then
-      usage
+      usage >&2
       exit 5
     fi
     shift
@@ -518,7 +534,7 @@ while [ $# != 0 ] ; do
     shift $(($OPTIND-1))
 
     if [ $# = 0 ] || [ $line_mode = 1 ] ; then
-      usage
+      usage >&2
       exit 1
     fi
 
