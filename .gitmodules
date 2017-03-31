@@ -1,0 +1,6 @@
+[submodule "modules/cxx"]
+	path = modules/falcon.cxx
+	url = https://github.com/jonathanpoelen/falcon.cxx/
+[submodule "modules/bjam-conf"]
+	path = modules/bjam-conf
+	url = https://github.com/jonathanpoelen/bjam-conf

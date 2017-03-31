@@ -1,3 +1,5 @@
+[![version.badge]](http://semver.org) [![travis.badge]][travis.url] [![appveyor.badge]][appveyor.url]
+
 # Colout -- Add colors to a text stream in your terminal
 
 Inspired by http://nojhan.github.com/colout/
@@ -157,3 +159,12 @@ COLORS_AND_STYLES
    ls -l | ./colout -t perm
    echo ' ab "abc\\tde\\"fg\\""hi' | colout -aC '"' r,o -- -cr '\\.' y,o -- -ec '"' r
 ```
+
+<!-- links -->
+[version.badge]: https://badge.fury.io/gh/jonathanpoelen%2Fcolout.svg
+
+[travis.url]: https://travis-ci.org/jonathanpoelen/colout
+[travis.badge]: https://travis-ci.org/jonathanpoelen/colout.svg?branch=master
+
+[appveyor.url]: https://ci.appveyor.com/project/jonathanpoelen/colout
+[appveyor.badge]: https://ci.appveyor.com/api/projects/status/github/jonathanpoelen/colout

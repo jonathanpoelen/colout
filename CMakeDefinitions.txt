@@ -1,0 +1,107 @@
+if (NOT "${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
+  add_definitions(
+    #-Werror
+    -pedantic
+
+    #-Wfatal-errors
+  )
+
+  if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+    add_definitions(
+      -Weverything
+      -Wno-documentation-unknown-command
+      #-Wno-range-loop-analysis
+      -Wno-disabled-macro-expansion
+      -Wno-c++98-compat
+      -Wno-c++98-compat-pedantic
+      -Wno-mismatched-tags
+      -Wno-padded
+      -Wno-global-constructors
+      -Wno-weak-vtables
+      -Wno-exit-time-destructors
+
+      -Wno-covered-switch-default
+      -Wno-shadow
+
+      -Wno-sign-conversion
+
+      -std=c++14
+    )
+  #CMAKE_COMPILER_IS_GNUCXX
+  elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+    add_definitions(
+      -Wall
+      -Wextra
+      -Wswitch-enum
+      -Wlogical-op
+      -Wundef
+      -Wcast-align
+      -Wformat-security
+      -Wunreachable-code
+      -Wformat=2
+      -Wfloat-equal
+      -Wpointer-arith
+      -Wconversion
+      -Wmissing-declarations
+      -Wmissing-noreturn
+      -Wmissing-format-attribute
+      -Wpacked
+      -Wredundant-decls
+      -Winline
+      -Wdouble-promotion
+      -Wcast-qual
+      -pedantic
+      -Wmissing-include-dirs
+      -Warray-bounds=2
+      -Wold-style-cast
+      -Woverloaded-virtual
+      -Wnon-virtual-dtor
+      -Wzero-as-null-pointer-constant
+      -Wsuggest-override
+      -Wtrampolines
+      -Wdouble-promotion
+    )
+    if (6.0 VERSION_LESS ${CMAKE_CXX_COMPILER_VERSION})
+      add_definitions(
+        -Wnull-dereference
+        -Wduplicated-cond
+        -Wmisleading-indentation
+      )
+    else()
+      add_definitions(
+        -std=c++14
+      )
+    endif()
+  endif()
+
+  option(SANITIZERS "enable sanitizers." OFF)
+
+  if (SANITIZERS)
+    set(SANITIZERS_FLAGS "\
+      -fsanitize=address\
+      -fsanitize=leak\
+      -fsanitize=undefined\
+    ")
+    add_definitions(${SANITIZERS_FLAGS})
+    set(CMAKE_CXX_LINK_FLAGS "${CMAKE_CXX_LINK_FLAGS} ${SANITIZERS_FLAGS}")
+    #link_libraries(-lasan)
+  endif()
+
+  if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+    add_definitions(-D_GLIBCXX_DEBUG)
+    #add_definitions(-D_GLIBCXX_ASSERTIONS)
+  endif()
+
+  set(CXX_STD "" CACHE STRING "language standard version (c++11, c++14, etc).")
+
+  if (CXX_STD)
+    add_definitions(
+      -std=${CXX_STD}
+    )
+  endif()
+
+#elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Intel")
+#  # using Intel C++
+#elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
+#  # using Visual Studio C++
+endif()
