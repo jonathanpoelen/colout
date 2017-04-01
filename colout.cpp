@@ -71,10 +71,10 @@ namespace colout
   struct Pattern
   {
     Pattern(
+      BranchCtx bctx,
       std::regex reg,
       std::vector<colout::Color> colors,
-      F f,
-      BranchCtx bctx
+      F f
     )
     : mReg(std::move(reg))
     , mColorGen(std::move(colors), bool(F::loop_color & f))
@@ -239,6 +239,25 @@ namespace colout
     int mI;
   };
 
+  struct Call
+  {
+    Call(BranchCtx bctx, std::size_t i)
+    : mI(int(i))
+    , mBCtx(bctx)
+    {}
+
+    VisitorResult run(Scanner& scanner, std::string& ctx, string_view sv)
+    {
+      auto res = run_at(scanner, mI, ctx, sv);
+      res.nextId = mBCtx.computeNextId(res.isFound);
+      return res;
+    }
+
+  private:
+    int mI;
+    BranchCtx mBCtx;
+  };
+
   struct TestPattern
   {
     TestPattern(std::size_t i, std::regex reg)
@@ -257,9 +276,43 @@ namespace colout
     int mI;
   };
 
+  struct TestPatternAndCall
+  {
+    TestPatternAndCall(BranchCtx bctx, std::size_t i, std::regex reg)
+    : mReg(std::move(reg))
+    , mI(int(i))
+    , mBCtx(bctx)
+    {}
+
+    VisitorResult run(Scanner& scanner, std::string& ctx, string_view sv)
+    {
+      bool exists = std::regex_search(sv.begin(), sv.end(), mReg);
+      if (exists)
+      {
+        auto res = run_at(scanner, mI, ctx, sv);
+        res.nextId = mBCtx.computeNextId(res.isFound);
+      }
+      return {false, mBCtx.nextIdFail, 0};
+    }
+
+  private:
+    std::regex mReg;
+    int mI;
+    BranchCtx mBCtx;
+  };
+
 
   struct Labels
   {
+    using Pair = std::pair<zstring, std::size_t>;
+    struct Less
+    {
+      bool operator()(Pair const & a, Pair const & b) const
+      {
+        return a.first < b.first;
+      };
+    };
+
     Labels(std::vector<cli::ColoutParam> const & coloutParams)
     {
       for (std::size_t i = 0; i < coloutParams.size(); ++i)
@@ -270,30 +323,35 @@ namespace colout
         }
       }
 
-      auto pair_less = [](auto const & a, auto const & b){
-        return strcmp(a.first.c_str(), b.first.c_str()) < -1;
-      };
+      std::sort(labels.begin(), labels.end(), Less{});
 
-      std::sort(labels.begin(), labels.end(), pair_less);
-
-      for (auto && opt : coloutParams)
+      auto cmp = [](auto& a, auto& b){ return a.first == b.first; };
+      auto p = std::adjacent_find(labels.begin(), labels.end(), cmp);
+      if (labels.end() != p)
       {
-        if (char const * label = opt.go_label.get())
-        {
-          auto cmp = [](auto const & p, char const * str){
-            return strcmp(p.first.c_str(), str) < 0;
-          };
-          auto p = std::lower_bound(labels.begin(), labels.end(), label, cmp);
-          if (p == labels.end() || strcmp(p->first.c_str(), label))
-          {
-            throw cli::runtime_cli_error(std::string("Unknown label ") + label);
-          }
-        }
+        throw cli::runtime_cli_error(
+          std::string("Duplicated label ") + p->first.c_str()
+        );
       }
     }
 
+    std::size_t find(zstring label) const
+    {
+      auto p = std::lower_bound(
+        labels.begin(), labels.end(),
+        Pair{label, 0}, Less{}
+      );
+      if (p == labels.end() || p->first != label)
+      {
+        throw cli::runtime_cli_error(
+          std::string("Unknown label ") + label.c_str()
+        );
+      }
+      return p->second;
+    }
+
   private:
-    std::vector<std::pair<zstring, unsigned>> labels;
+    std::vector<Pair> labels;
   };
 
   template<class T>
@@ -374,13 +432,17 @@ namespace colout
 
   struct Scanner
   {
-    struct Element : Variant<
+    template<class... Ts>
+    using Variant_ = Variant<Ts..., Loop<Ts>...>;
+
+    struct Element : Variant_<
       Pattern,
+      TestPattern,
+      TestPatternAndCall,
       Group<TestPattern>,
       Group<Jump>,
-      Loop<Pattern>,
-      Loop<Group<TestPattern>>,
-      Loop<Group<Jump>>
+      Jump,
+      Call
     >
     {
       using Variant::Variant;
@@ -392,6 +454,7 @@ namespace colout
   VisitorResult run_at(Scanner& scanner, int id, std::string& ctx, string_view sv)
   {
     assert(id != -1);
+    std::cerr << id << " " << sv << "\n";
     return scanner.elems[id].visit([&](auto & p){
       return p.run(scanner, ctx, sv);
     });
@@ -460,9 +523,13 @@ namespace colout
 
     for (int const i : range(0, int(params.size())))
     {
-      int const nextIdOk = get_next_ok(params, i);
-      int const nextIdFail = get_next_fail(params, i);
+      BranchCtx bctx{
+        get_next_ok(params, i),
+        get_next_fail(params, i)
+      };
       ColoutParamCRef param = params[i];
+
+      std::cerr << i << " -> " << bctx.nextIdOk << "  " << bctx.nextIdFail << "\n";
 
       auto mk_maybe_loop = [&](auto t, auto mk){
         if (bool(F::loop_regex & param.activated_flags))
@@ -479,43 +546,62 @@ namespace colout
       {
         std::regex reg(param.regex.c_str());
 
-        auto mk_pattern = [&](auto t){
-          elems.emplace_back(
-            t,
-            std::move(reg),
-            std::move(param.colors),
-            param.activated_flags,
-            BranchCtx{nextIdOk, nextIdFail}
-          );
-        };
-
-        auto mk_group = [&](auto t){
-          elems.emplace_back(
-            t,
-            BranchCtx{nextIdOk, nextIdFail},
-            elems.size() + 1u,
-            std::move(reg)
-          );
-        };
-
         if (bool(F::next_is_sub & param.activated_flags))
         {
-          mk_maybe_loop(PlaceType<Group<TestPattern>>{}, mk_group);
+          mk_maybe_loop(PlaceType<Group<TestPattern>>{}, [&](auto t){
+            elems.emplace_back(t, bctx, elems.size() + 1u, std::move(reg));
+          });
+        }
+        else if (param.go_label)
+        {
+          auto const jumpId = labels.find(param.go_label);
+          if (bool(F::call_label | param.activated_flags))
+          {
+            mk_maybe_loop(PlaceType<TestPatternAndCall>{}, [&](auto t){
+              elems.emplace_back(t, bctx, jumpId, std::move(reg));
+            });
+          }
+          else
+          {
+            mk_maybe_loop(PlaceType<TestPattern>{}, [&](auto t){
+              elems.emplace_back(t, jumpId, std::move(reg));
+            });
+          }
         }
         else
         {
-          mk_maybe_loop(PlaceType<Pattern>{}, mk_pattern);
+          mk_maybe_loop(PlaceType<Pattern>{}, [&](auto t){
+            elems.emplace_back(
+              t,
+              bctx,
+              std::move(reg),
+              std::move(param.colors),
+              param.activated_flags
+            );
+          });
         }
       }
       else if (bool(F::start_group & param.activated_flags))
       {
         mk_maybe_loop(PlaceType<Group<Jump>>{}, [&](auto t){
-          elems.emplace_back(
-            t,
-            BranchCtx{nextIdOk, nextIdFail},
-            elems.size() + 1u
-          );
+          elems.emplace_back(t, bctx, elems.size() + 1u);
         });
+      }
+      else if (param.go_label)
+      {
+        auto const jumpId = labels.find(param.go_label);
+        if (bool(F::call_label | param.activated_flags))
+        {
+          mk_maybe_loop(PlaceType<Call>{}, [&](auto t){
+            elems.emplace_back(t, bctx, jumpId);
+          });
+        }
+        else
+        {
+          mk_maybe_loop(PlaceType<Jump>{}, [&](auto t){
+            elems.emplace_back(t, jumpId);
+          });
+        }
       }
     }
 
@@ -532,8 +618,9 @@ int main(int ac, char ** av)
   std::vector<cli::ColoutParam> colout_params = cli::colout_parse_cli(ac, av);
 
   unsigned i = 0;
-  for (cli::ColoutParam const & colout_param : colout_params) {
-    std::cout << i++ << "\n"
+  for (cli::ColoutParam const & colout_param : colout_params)
+  {
+    std::cerr << i++ << "\n"
       << "  r(" << bool(colout_param.activated_flags & F::regex_flags) << "): "
       << colout_param.regex << "\n"
       << "  loop: " << bool(colout_param.activated_flags & F::loop_flags)

@@ -64,7 +64,7 @@ namespace cli {
     scale_div = (1 << 14),
     invert_loop = (1 << 15),
     ignore_case = (1 << 16),
-    goto_root = (1 << 17),
+    end_color_mark = (1 << 17),
     scale = (1 << 18),
     line_mode = (1 << 19),
     help = (1 << 20),
@@ -75,7 +75,9 @@ namespace cli {
     start_group = (1 << 25),
     is_close = (1 << 26),
     continue_from_last_color = (1 << 27),
-    end_color_mark = (1 << 28),
+    call_label = (1 << 28),
+    goto_label = (1 << 29),
+    jump_flags = goto_label | call_label,
   };
 }
 

@@ -3,6 +3,7 @@
 #include <iosfwd>
 #include <cassert>
 #include <cstring>
+#include <utility>
 
 namespace colout {
 
@@ -48,10 +49,19 @@ private:
 
 inline bool operator==(zstring const & a, zstring const & b) noexcept
 {
-  return 0 == strcmp(a.c_str(), b.c_str());
+  return strcmp(a.c_str(), b.c_str()) == 0;
 }
 
-inline std::ostream & operator << (std::ostream & os, zstring const & zstr)
+inline bool operator<(zstring const & a, zstring const & b) noexcept
+{
+  return strcmp(a.c_str(), b.c_str()) < 0;
+}
+
+using namespace std::rel_ops;
+
+template<class Ch, class Tr>
+std::basic_ostream<Ch, Tr> &
+operator << (std::basic_ostream<Ch, Tr> & os, zstring const & zstr)
 {
   return os << (bool(zstr) ? zstr.c_str() : "(nil)");
 }

@@ -123,12 +123,11 @@ inline int parse_cli(
     cli_flag('D', "div", "", ActiveFlags::scale | ActiveFlags::scale_div),
     cli_flag('v', "invert-loop", "", ActiveFlags::invert_loop),
     cli_flag('i', "ignore-case", "", ActiveFlags::ignore_case),
-    cli_flag('R', "goto-root", "", ActiveFlags::goto_root),
 
     // TODO -P, --select-regex=
     // i -> integer
     // f f. -> float
-    // f -> float with comma
+    // f, -> float with comma
     // < ( [ -> group with depth
     // % -> integer and %
     // %. -> float and %
@@ -215,6 +214,14 @@ inline int parse_cli(
     }),
     cli_optv('G', "goto-label", "", [](ColoutParam& coloutParam, char const* s){
       CLI_ERR_IF(!*s, "is empty");
+      coloutParam.activated_flags &= ~ActiveFlags::jump_flags;
+      coloutParam.activated_flags |= ActiveFlags::goto_label;
+      coloutParam.go_label = s;
+    }),
+    cli_optv('C', "call-label", "", [](ColoutParam& coloutParam, char const* s){
+      CLI_ERR_IF(!*s, "is empty");
+      coloutParam.activated_flags &= ~ActiveFlags::jump_flags;
+      coloutParam.activated_flags |= ActiveFlags::call_label;
       coloutParam.go_label = s;
     }),
     cli_optv('d', "delimiter", "", [](GlobalParam& globalParam, char const* s){
@@ -347,10 +354,6 @@ inline int parse_cli(
     return -1;
   }
 
-  if (bool(coloutParam.activated_flags & ActiveFlags::goto_root)
-   && coloutParam.go_label) {
-  }
-
   return optint;
 }
 
@@ -464,20 +467,14 @@ std::vector<ColoutParam> colout_parse_cli(int ac, char const* const* av)
       continue;
     }
 
-    if (!bool(coloutParam.activated_flags & ActiveFlags::regex)) {
-      coloutParam.activated_flags |= ActiveFlags::regex;
-      coloutParam.regex = s;
-      args.next();
-    }
-
-    for (; args.is_valid(); args.next()) {
-      s = args.current();
-
+    auto exec_sep = [&](char const * s)
+    {
       if (globalParam.delim_open == s[0] && !s[1]) {
         ast.open_group();
         args.next();
-        break;
+        return true;
       }
+
       if (globalParam.delim_close == s[0] && !s[1]) {
         unsigned i;
         do {
@@ -501,21 +498,43 @@ std::vector<ColoutParam> colout_parse_cli(int ac, char const* const* av)
             args.next();
           }
         }
-        break;
+        return true;
       }
+
       if (globalParam.delim_or == s[0] && !s[1]) {
         coloutParam.activated_flags |= ActiveFlags::next_is_alt;
         args.next();
-        break;
+        return true;
       }
+
       if (globalParam.delim_list == s[0] && !s[1]) {
         coloutParam.activated_flags |= ActiveFlags::next_is_seq;
         args.next();
-        break;
+        return true;
       }
+
       if (globalParam.delim_or == s[0] && globalParam.delim_list == s[1] && !s[2]) {
         coloutParam.activated_flags |= ActiveFlags::next_is_alt | ActiveFlags::next_is_seq;
         args.next();
+        return true;
+      }
+
+      return false;
+    };
+
+    if (coloutParam.go_label && exec_sep(s)) {
+      continue;
+    }
+
+    if (!bool(coloutParam.activated_flags & ActiveFlags::regex)) {
+      coloutParam.activated_flags |= ActiveFlags::regex;
+      coloutParam.regex = s;
+      args.next();
+    }
+
+    for (; args.is_valid(); args.next()) {
+      s = args.current();
+      if (exec_sep(s)) {
         break;
       }
 

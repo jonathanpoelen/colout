@@ -29,6 +29,7 @@ SOFTWARE.
 
 #pragma once
 
+#include <iosfwd>
 #include <cstdint>
 #include <cstring> // strlen
 #include <cassert>
@@ -97,6 +98,13 @@ namespace colout
     char const * s_ = nullptr;
     std::size_t n_ = 0;
   };
+
+  template<class Ch, class Tr>
+  std::basic_ostream<Ch, Tr> &
+  operator << (std::basic_ostream<Ch, Tr> &os, string_view const & sv)
+  {
+    return os.write(sv.data(), sv.size());
+  }
 
   inline constexpr string_view operator
   "" _sv(char const * s, std::size_t n)
