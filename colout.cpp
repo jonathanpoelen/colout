@@ -302,58 +302,6 @@ namespace colout
   };
 
 
-  struct Labels
-  {
-    using Pair = std::pair<zstring, std::size_t>;
-    struct Less
-    {
-      bool operator()(Pair const & a, Pair const & b) const
-      {
-        return a.first < b.first;
-      };
-    };
-
-    Labels(std::vector<cli::ColoutParam> const & coloutParams)
-    {
-      for (std::size_t i = 0; i < coloutParams.size(); ++i)
-      {
-        if (zstring const label{coloutParams[i].label})
-        {
-          labels.emplace_back(label, i);
-        }
-      }
-
-      std::sort(labels.begin(), labels.end(), Less{});
-
-      auto cmp = [](auto& a, auto& b){ return a.first == b.first; };
-      auto p = std::adjacent_find(labels.begin(), labels.end(), cmp);
-      if (labels.end() != p)
-      {
-        throw cli::runtime_cli_error(
-          std::string("Duplicated label ") + p->first.c_str()
-        );
-      }
-    }
-
-    std::size_t find(zstring label) const
-    {
-      auto p = std::lower_bound(
-        labels.begin(), labels.end(),
-        Pair{label, 0}, Less{}
-      );
-      if (p == labels.end() || p->first != label)
-      {
-        throw cli::runtime_cli_error(
-          std::string("Unknown label ") + label.c_str()
-        );
-      }
-      return p->second;
-    }
-
-  private:
-    std::vector<Pair> labels;
-  };
-
   template<class T>
   struct PlaceType
   {
@@ -517,8 +465,6 @@ namespace colout
 
   inline Scanner make_scanner(std::vector<cli::ColoutParam> params)
   {
-    Labels labels{params};
-
     fixed_array<Scanner::Element> elems(params.size());
 
     for (int const i : range(0, int(params.size())))
@@ -554,17 +500,16 @@ namespace colout
         }
         else if (param.go_label)
         {
-          auto const jumpId = labels.find(param.go_label);
           if (bool(F::call_label | param.activated_flags))
           {
             mk_maybe_loop(PlaceType<TestPatternAndCall>{}, [&](auto t){
-              elems.emplace_back(t, bctx, jumpId, std::move(reg));
+              elems.emplace_back(t, bctx, param.go_id, std::move(reg));
             });
           }
           else
           {
             mk_maybe_loop(PlaceType<TestPattern>{}, [&](auto t){
-              elems.emplace_back(t, jumpId, std::move(reg));
+              elems.emplace_back(t, param.go_id, std::move(reg));
             });
           }
         }
@@ -589,17 +534,16 @@ namespace colout
       }
       else if (param.go_label)
       {
-        auto const jumpId = labels.find(param.go_label);
         if (bool(F::call_label | param.activated_flags))
         {
           mk_maybe_loop(PlaceType<Call>{}, [&](auto t){
-            elems.emplace_back(t, bctx, jumpId);
+            elems.emplace_back(t, bctx, param.go_id);
           });
         }
         else
         {
           mk_maybe_loop(PlaceType<Jump>{}, [&](auto t){
-            elems.emplace_back(t, jumpId);
+            elems.emplace_back(t, param.go_id);
           });
         }
       }

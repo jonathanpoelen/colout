@@ -118,6 +118,7 @@ namespace cli
     std::vector<Units> def_units;
     std::vector<Color> colors;
     int bind_index = -1;
+    int go_id = -1; // only if go_label is defined
 
     bool has_units() {
       return !def_units.empty() || units;
@@ -142,13 +143,6 @@ namespace cli
     ColoutParam& coloutParam,
     int ac, char const* const* av
   );
-
-  struct ColoutParams
-  {
-    unsigned countValidId;
-    // TODO encoding
-    std::vector<ColoutParam> coloutParams;
-  };
 
   std::vector<ColoutParam> colout_parse_cli(int ac, char const* const* av);
 

@@ -123,6 +123,7 @@ inline int parse_cli(
     cli_flag('D', "div", "", ActiveFlags::scale | ActiveFlags::scale_div),
     cli_flag('v', "invert-loop", "", ActiveFlags::invert_loop),
     cli_flag('i', "ignore-case", "", ActiveFlags::ignore_case),
+    // TODO restart group '( x , y , z , --restart )'
 
     // TODO -P, --select-regex=
     // i -> integer
@@ -357,6 +358,51 @@ inline int parse_cli(
   return optint;
 }
 
+struct Labels
+{
+  using Pair = std::pair<zstring, int>;
+  struct Less
+  {
+    bool operator()(Pair const & a, Pair const & b) const
+    {
+      return a.first < b.first;
+    };
+  };
+
+  Labels(std::vector<cli::ColoutParam> const & coloutParams)
+  {
+    for (std::size_t i = 0; i < coloutParams.size(); ++i) {
+      if (zstring const label{coloutParams[i].label}) {
+        labels.emplace_back(label, int(i));
+      }
+    }
+
+    std::sort(labels.begin(), labels.end(), Less{});
+
+    auto cmp = [](auto& a, auto& b){ return a.first == b.first; };
+    auto p = std::adjacent_find(labels.begin(), labels.end(), cmp);
+    CLI_ERR_IF(
+      labels.end() != p,
+      std::string("Duplicated label ") + p->first.c_str()
+    );
+  }
+
+  int find(zstring label) const
+  {
+    auto p = std::lower_bound(
+      labels.begin(), labels.end(),
+      Pair{label, 0}, Less{}
+    );
+    CLI_ERR_IF(
+      p == labels.end() || p->first != label,
+      std::string("Unknown label ") + label.c_str()
+    );
+    return p->second;
+  }
+
+private:
+  std::vector<Pair> labels;
+};
 
 struct ColoutParamAst
 {
@@ -412,7 +458,13 @@ struct ColoutParamAst
     }
 
     // TODO cond opti
-    // TODO label
+
+    Labels labels{coloutParams};
+    for (ColoutParam & param : coloutParams) {
+      if (param.go_label) {
+        param.go_id = labels.find(param.go_label);
+      }
+    }
   }
 };
 
