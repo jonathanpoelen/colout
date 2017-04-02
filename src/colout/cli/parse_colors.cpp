@@ -156,6 +156,67 @@ inline void parse_int_color(
   }
 }
 
+enum ParsePalette { Yes, No };
+
+template<ParsePalette parse_palette>
+void parse_color(
+  ColorBuilder & builder,
+  string_view color,
+  std::vector<Color> & colors,
+  Palettes const & palettes
+) {
+  // fg= or bg=
+  Plan plan = Plan::fg;
+  if (color.size() > 3
+    && color[2] == '=' && color[1] == 'g'
+    && (color[0] == 'b' || color[0] == 'f')
+  ) {
+    plan = color[0] == 'b' ? Plan::bg : Plan::fg;
+    color.remove_prefix(3);
+  }
+
+  if (color.empty()) {
+    throw_unknown_color(color);
+  }
+
+  // #fff, #ffffff
+  if ('#' == color[0]) {
+    builder.push_plan(plan);
+    parse_hex_color(builder, color);
+  }
+  // @[0-255]
+  else if ('@' == color[0]) {
+    builder.push_plan(plan);
+    parse_256_color(builder, color);
+  }
+  // [0-255][;...], [0-255]/[0-255]/[0-255]
+  else if ('0' <= color[0] && color[0] <= '9') {
+    parse_int_color(builder, color, plan);
+  }
+  // palette color
+  else if (parse_palette == ParsePalette::Yes) {
+    PaletteRef palette = palettes.get(color, plan);
+    if (palette.empty()) {
+      throw_unknown_color(color);
+    }
+
+    if (palette.size() == 1) {
+      builder.push_palette(palette[0]);
+    }
+    else {
+      builder.push_plan(plan);
+      builder.save_states();
+      for (string_view sv : palette) {
+        builder.push_palette(sv);
+        colors.push_back(builder.get_color_and_clear());
+      }
+    }
+  }
+  else {
+    throw_unknown_color(color);
+  }
+}
+
 void parse_colors(
   ColorBuilder & builder,
   std::vector<Color> & colors,
@@ -166,58 +227,20 @@ void parse_colors(
   builder.reset();
   for (string_view color : get_lines(rng, delimiter))
   {
-    // fg= or bg=
-    Plan plan = Plan::fg;
-    if (color.size() > 3
-      && color[2] == '=' && color[1] == 'g'
-      && (color[0] == 'b' || color[0] == 'f')
-    ) {
-      plan = color[0] == 'b' ? Plan::bg : Plan::fg;
-      color.remove_prefix(3);
-    }
-
-    if (color.empty()) {
-      throw_unknown_color(color);
-    }
-
-    // #fff, #ffffff
-    if ('#' == color[0]) {
-      builder.push_plan(plan);
-      parse_hex_color(builder, color);
-    }
-    // @[0-255]
-    else if ('@' == color[0]) {
-      builder.push_plan(plan);
-      parse_256_color(builder, color);
-    }
-    // [0-255][;...], [0-255]/[0-255]/[0-255]
-    else if ('0' <= color[0] && color[0] <= '9') {
-      parse_int_color(builder, color, plan);
-    }
-    // palette color
-    else {
-      PaletteRef palette = palettes.get(color, plan);
-      if (palette.empty()) {
-        throw_unknown_color(color);
-      }
-
-      if (palette.size() == 1) {
-        builder.push_palette(palette[0]);
-      }
-      else {
-        builder.push_plan(plan);
-        builder.save_states();
-        for (string_view sv : palette) {
-          builder.push_palette(sv);
-          colors.push_back(builder.get_color_and_clear());
-        }
-      }
-    }
+    parse_color<ParsePalette::Yes>(builder, color, colors, palettes);
   }
 
   if (!builder.empty()) {
     colors.push_back(builder.get_color_and_clear());
   }
+}
+
+void parse_color(ColorBuilder & builder, string_view color)
+{
+  std::vector<Color> colors;
+  Palettes palettes;
+  builder.reset();
+  parse_color<ParsePalette::No>(builder, color, colors, palettes);
 }
 
 } }

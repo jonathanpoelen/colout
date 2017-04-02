@@ -113,19 +113,18 @@ inline int parse_cli(
     cli_flag('w', "loop", "", ActiveFlags::loop_regex),
     cli_flag('c', "loop-color", "", ActiveFlags::loop_color),
     cli_flag('k', "keep-colormap", "", ActiveFlags::keep_color),
-    cli_flag('r', "no-color-reset", "", ActiveFlags::no_reset),
-    cli_flag('K', "set-normal-color", "", ActiveFlags::set_reset),
     cli_flag('N', "lc-numeric", "", ActiveFlags::lc_numeric),
     cli_flag('o', "use-locale", "", ActiveFlags::use_locale),
     cli_flag('h', "scale-hidden", "", ActiveFlags::hidden_scale),
     cli_flag('j', "log", "", ActiveFlags::scale | ActiveFlags::scale_log),
     cli_flag('e', "exp", "", ActiveFlags::scale | ActiveFlags::scale_exp),
     cli_flag('D', "div", "", ActiveFlags::scale | ActiveFlags::scale_div),
-    cli_flag('v', "invert-loop", "", ActiveFlags::invert_loop),
     cli_flag('i', "ignore-case", "", ActiveFlags::ignore_case),
     // TODO restart group '( x , y , z , --restart )'
 
     // TODO -P, --select-regex=
+    // a -> ^.*$
+    // A -> ^.+$
     // i -> integer
     // f f. -> float
     // f, -> float with comma
@@ -139,6 +138,22 @@ inline int parse_cli(
     // :xxx -> user predefined pattern
     cli_flag('I', "regex-int", "", ActiveFlags::regex_int),
     cli_flag('f', "regex-float", "", ActiveFlags::regex_float),
+
+    cli_optv('r', "no-color-reset", "", [](ColoutParam& coloutParam, char const*){
+      coloutParam.esc = "";
+      coloutParam.esc2.clear();
+    }),
+    cli_optv('K', "set-normal-color", "", [](ColoutParam& coloutParam, char const* s){
+      if (*s) {
+        coloutParam.esc = "";
+        coloutParam.esc2.clear();
+      }
+      else {
+        ColorBuilder builder;
+        parse_color(builder, {s, strlen(s)});
+        coloutParam.esc2 = builder.get_color_and_clear().str_move();
+      }
+    }),
 
     cli_optv('p', "regex", "", [](ColoutParam& coloutParam, char const* s){
       coloutParam.regex = s;

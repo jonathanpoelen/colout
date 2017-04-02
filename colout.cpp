@@ -74,11 +74,12 @@ namespace colout
       BranchCtx bctx,
       std::regex reg,
       std::vector<colout::Color> colors,
+      std::string esc_reset,
       F f
     )
     : mReg(std::move(reg))
     , mColorGen(std::move(colors), bool(F::loop_color & f))
-    , mEscReset(bool(F::no_reset & f) ? string_view{} : esc_reset)
+    , mEscReset(std::move(esc_reset))
     , mResetColor(!bool(F::keep_color & f))
     , mContinueFromLastColor(bool(F::continue_from_last_color & f))
     , mEndColorMark(bool(F::end_color_mark & f))
@@ -145,7 +146,7 @@ namespace colout
     std::regex mReg;
     std::cmatch mMatch;
     ColorGen mColorGen;
-    string_view mEscReset;
+    std::string mEscReset;
     bool mResetColor;
     bool mContinueFromLastColor;
     bool mEndColorMark;
@@ -226,8 +227,8 @@ namespace colout
 
   struct Jump
   {
-    Jump(std::size_t i)
-    : mI(int(i))
+    Jump(int i)
+    : mI(i)
     {}
 
     VisitorResult run(Scanner& scanner, std::string& ctx, string_view sv)
@@ -241,8 +242,8 @@ namespace colout
 
   struct Call
   {
-    Call(BranchCtx bctx, std::size_t i)
-    : mI(int(i))
+    Call(BranchCtx bctx, int i)
+    : mI(i)
     , mBCtx(bctx)
     {}
 
@@ -260,9 +261,9 @@ namespace colout
 
   struct TestPattern
   {
-    TestPattern(std::size_t i, std::regex reg)
+    TestPattern(int i, std::regex reg)
     : mReg(std::move(reg))
-    , mI(int(i))
+    , mI(i)
     {}
 
     VisitorResult run(Scanner&, std::string&, string_view sv)
@@ -278,9 +279,9 @@ namespace colout
 
   struct TestPatternAndCall
   {
-    TestPatternAndCall(BranchCtx bctx, std::size_t i, std::regex reg)
+    TestPatternAndCall(BranchCtx bctx, int i, std::regex reg)
     : mReg(std::move(reg))
-    , mI(int(i))
+    , mI(i)
     , mBCtx(bctx)
     {}
 
@@ -495,10 +496,10 @@ namespace colout
         if (bool(F::next_is_sub & param.activated_flags))
         {
           mk_maybe_loop(PlaceType<Group<TestPattern>>{}, [&](auto t){
-            elems.emplace_back(t, bctx, elems.size() + 1u, std::move(reg));
+            elems.emplace_back(t, bctx, int(elems.size() + 1u), std::move(reg));
           });
         }
-        else if (param.go_label)
+        else if (param.go_id != -1)
         {
           if (bool(F::call_label | param.activated_flags))
           {
@@ -516,11 +517,16 @@ namespace colout
         else
         {
           mk_maybe_loop(PlaceType<Pattern>{}, [&](auto t){
+            auto esc = std::move(param.esc2);
+            if (esc.empty()) {
+              esc = param.esc ? param.esc.c_str() : esc_reset.data();
+            }
             elems.emplace_back(
               t,
               bctx,
               std::move(reg),
               std::move(param.colors),
+              std::move(esc),
               param.activated_flags
             );
           });
@@ -529,10 +535,10 @@ namespace colout
       else if (bool(F::start_group & param.activated_flags))
       {
         mk_maybe_loop(PlaceType<Group<Jump>>{}, [&](auto t){
-          elems.emplace_back(t, bctx, elems.size() + 1u);
+          elems.emplace_back(t, bctx, int(elems.size() + 1u));
         });
       }
-      else if (param.go_label)
+      else if (param.go_id != -1)
       {
         if (bool(F::call_label | param.activated_flags))
         {

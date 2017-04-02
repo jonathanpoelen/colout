@@ -78,6 +78,7 @@ namespace colout
     const_iterator end() const { return cmd_.end(); }
 
     const std::string & str() const noexcept { return cmd_; }
+    std::string str_move() noexcept { return std::move(cmd_); }
   };
 
   struct ColorBuilder

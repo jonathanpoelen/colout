@@ -51,8 +51,8 @@ namespace cli {
     regex_flags = regex | regex_int | regex_float,
     loop_color = (1 << 3),
     keep_color = (1 << 4),
-    no_reset = (1 << 5),
-    set_reset = (1 << 6),
+    //no_reset = (1 << 5),
+    //set_reset = (1 << 6),
     set_n_loop = (1 << 7),
     loop_regex = (1 << 8),
     loop_flags = set_n_loop | loop_regex,
@@ -62,7 +62,7 @@ namespace cli {
     scale_log = (1 << 12),
     scale_exp = (1 << 13),
     scale_div = (1 << 14),
-    invert_loop = (1 << 15),
+    //invert_loop = (1 << 15),
     ignore_case = (1 << 16),
     end_color_mark = (1 << 17),
     scale = (1 << 18),
@@ -110,6 +110,8 @@ namespace cli
     zstring go_label;
     zstring units;
     zstring locale;
+    zstring esc;
+    std::string esc2;
     int n_loop = -1;
     double scale_min = 0;
     double scale_max = 100;

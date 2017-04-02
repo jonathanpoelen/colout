@@ -51,6 +51,11 @@ namespace colout
       string_view color
     );
 
+    void parse_color(
+      ColorBuilder & builder,
+      string_view color
+    );
+
     void parse_colors(
       ColorBuilder & builder,
       std::vector<Color> & colors,
