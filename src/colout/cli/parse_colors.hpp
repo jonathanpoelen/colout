@@ -35,8 +35,8 @@ SOFTWARE.
 
 namespace colout
 {
-  class Color;
   class Palettes;
+  class ColorParam;
   class ColorBuilder;
 
   namespace cli
@@ -58,7 +58,7 @@ namespace colout
 
     void parse_colors(
       ColorBuilder & builder,
-      std::vector<Color> & colors,
+      std::vector<ColorParam> & colors,
       string_view rng,
       Palettes const & palettes,
       char delimiter

@@ -17,12 +17,13 @@ using colout::operator""_sv;
 BOOST_AUTO_TEST_CASE(Color)
 {
   colout::ColorBuilder builder;
-  std::vector<colout::Color> colors;
+  std::vector<colout::cli::ColorParam> colors;
   colout::Palettes palettes;
 
 #define EQ(s)                         \
   BOOST_CHECK_EQ(1u, colors.size());  \
-  BOOST_CHECK_EQ(colors[0].str(), s); \
+  BOOST_CHECK_EQ(colors[0].id_label, -1); \
+  BOOST_CHECK_EQ(colors[0].color.str(), s); \
   colors.clear()
 
   colout::cli::parse_colors(builder, colors, SV("#f00,#00ff00"), palettes, ',');

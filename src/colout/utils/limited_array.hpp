@@ -34,18 +34,17 @@ SOFTWARE.
 #include <utility>
 #include <new>
 
-// TODO limited_array
 template<class T>
-struct fixed_array
+struct limited_array
 {
-  fixed_array(std::size_t n)
+  limited_array(std::size_t n)
   : m_elems(static_cast<T*>(::operator new[](sizeof(T) * n)))
 #ifndef NDEBUG
   , m_sz(n)
 #endif
   {}
 
-  fixed_array(fixed_array && other) noexcept
+  limited_array(limited_array && other) noexcept
   : m_elems(std::exchange(other.m_elems, nullptr))
   , m_i(std::exchange(other.m_i, 0))
 #ifndef NDEBUG
@@ -53,9 +52,9 @@ struct fixed_array
 #endif
   {}
 
-  fixed_array(fixed_array const&) = delete;
+  limited_array(limited_array const&) = delete;
 
-  ~fixed_array()
+  ~limited_array()
   {
     while (m_i)
     {
@@ -64,7 +63,7 @@ struct fixed_array
     ::operator delete[](m_elems);
   }
 
-  fixed_array& operator=(fixed_array && other) noexcept
+  limited_array& operator=(limited_array && other) noexcept
   {
     m_elems = std::exchange(other.m_elems, nullptr);
     m_i = std::exchange(other.m_i, 0);
@@ -74,7 +73,7 @@ struct fixed_array
     return *this;
   }
 
-  fixed_array& operator=(fixed_array const&) = delete;
+  limited_array& operator=(limited_array const&) = delete;
 
   T& operator[](std::size_t i)
   {

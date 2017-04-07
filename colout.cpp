@@ -1,5 +1,35 @@
+/* The MIT License (MIT)
+
+Copyright (c) 2016 jonathan poelen
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+*/
+
+/**
+* \author    Jonathan Poelen <jonathan.poelen@gmail.com>
+* \version   0.1
+* \brief
+*/
+
 #include "colout/cli/parse_cli.hpp"
-#include "colout/utils/fixed_array.hpp"
+#include "colout/utils/limited_array.hpp"
+#include "colout/utils/range.hpp"
 
 #include <falcon/cxx/cxx.hpp>
 
@@ -16,6 +46,105 @@ namespace colout
 {
   constexpr string_view esc_reset
     FALCON_IN_IDE_PARSER_CONDITIONAL(FALCON_PP_NIL, = "\033[0m"_sv);
+
+
+  // Variant
+  //@{
+  template<class T>
+  struct PlaceType
+  {
+    explicit PlaceType() = default;
+    using type = T;
+  };
+
+  namespace detail
+  {
+    template<class Ints, class... Ts>
+    struct IndexedType;
+
+    template<class i, class T>
+    struct PairType {};
+
+    template<std::size_t... I, class... Ts>
+    struct IndexedType<std::integer_sequence<std::size_t, I...>, Ts...>
+    : PairType<std::integral_constant<std::size_t, I>, Ts>...
+    {};
+
+    template<class T, class I>
+    I get_index_of(PairType<I, T>*);
+  }
+
+  template<class T, class... Ts>
+  using indexOf = decltype(detail::get_index_of<T>(
+    static_cast<
+      detail::IndexedType<
+        std::index_sequence_for<Ts...>,
+        Ts...
+      >*
+    >(nullptr)
+  ));
+
+  template<class R, class F, class T, class... Args>
+  struct PtrFuncHelper
+  {
+    static R impl(F&& f, void * d, Args&&... args)
+    {
+      return f(*static_cast<T*>(d), std::forward<Args>(args)...);
+    }
+  };
+
+  template<class T, class... Ts>
+  struct Variant
+  {
+    template<class U, class... Args>
+    Variant(PlaceType<U>, Args && ... args)
+    : idx_(indexOf<U, T, Ts...>::value)
+    {
+      new (&data_) U {std::forward<Args>(args)...};
+    }
+
+    Variant(Variant && other)
+    : idx_(other.idx_)
+    {
+      other.visit([this, &other](auto & d) {
+        using U = std::remove_reference_t<decltype(d)>;
+        new (&this->data_) U {std::move(*static_cast<T*>(other.d))};
+      });
+    }
+
+    Variant(Variant const &) = delete;
+
+    Variant operator=(Variant const &) = delete;
+
+    ~Variant()
+    {
+      visit([](auto & d) {
+        using U = std::remove_reference_t<decltype(d)>;
+        d.~U();
+      });
+    }
+
+    template<
+      class F, class... Args,
+      class R = decltype(
+        std::declval<F&&>()(std::declval<T&>(), std::declval<Args&&>()...)
+      )
+    >
+    R visit(F && f, Args && ... args)
+    {
+      using proto = R(*)(F &&, void *, Args...);
+      static constexpr proto func_ptrs[]{
+        PtrFuncHelper<R, F, T, Args...>::impl,
+        PtrFuncHelper<R, F, Ts, Args...>::impl...
+      };
+      return func_ptrs[idx_](std::forward<F>(f), &data_, args...);
+    }
+
+    typename std::aligned_union_t<0, T, Ts...>::type data_;
+    int idx_;
+  };
+  //@}
+
 
   struct VisitorResult
   {
@@ -35,21 +164,73 @@ namespace colout
     }
   };
 
-  struct ColorGen
+  class Scanner;
+
+  VisitorResult run_at(
+    Scanner& scanner, int id, std::string& ctx, string_view sv
+  );
+
+  struct ColorApplicator
   {
-    ColorGen(std::vector<colout::Color> colors, bool loop)
-    : mColors(colors)
-    , mMaxColor(int(mColors.size())-1)
-    , mModColor(loop ? int(mColors.size()) : std::numeric_limits<int>::max())
+    ColorApplicator(Color color)
+    : mColorOrId(PlaceType<std::string>{}, color.str_move())
+    {}
+
+    ColorApplicator(int id)
+    : mColorOrId(PlaceType<int>{}, id)
+    {}
+
+    bool apply(Scanner& scanner, std::string& ctx, string_view sv)
+    {
+      struct Fns
+      {
+        bool operator()(
+          std::string const& s,
+          Scanner&, std::string& ctx, string_view sv)
+        {
+          ctx
+            .append(begin(s), end(s))
+            .append(begin(sv), end(sv))
+          ;
+          return true;
+        }
+
+        bool operator()(
+          int id,
+          Scanner& scanner, std::string& ctx, string_view sv)
+        {
+          std::size_t pos = 0;
+
+          auto res = run_at(scanner, id, ctx, sv);
+          while (res.nextId != -1)
+          {
+            pos += res.countConsumed;
+            res = run_at(scanner, res.nextId, ctx, sv.substr(pos));
+          }
+          return res.isFound;
+        }
+      };
+      return mColorOrId.visit(Fns{}, scanner, ctx, sv);
+    }
+
+  private:
+    Variant<std::string, int> mColorOrId;
+  };
+
+  struct ColorSelector
+  {
+    ColorSelector(std::size_t count, bool loop)
+    : mCount(int(count))
+    , mMaxColor(mCount-1)
+    , mModColor(loop ? mCount : std::numeric_limits<int>::max())
     {
     }
 
-    colout::Color const & next_color()
+    std::size_t next_idx()
     {
       auto i = std::min(mIColor % mModColor, mMaxColor);
-      auto const & color = mColors[i];
       ++mIColor;
-      return color;
+      return std::size_t(i);
     }
 
     void reset()
@@ -58,13 +239,11 @@ namespace colout
     }
 
   private:
-    std::vector<colout::Color> mColors;
+    int mCount;
     int mMaxColor;
     int mModColor;
     int mIColor = 0;
   };
-
-  struct Scanner;
 
   using F = cli::ActiveFlags;
 
@@ -73,12 +252,13 @@ namespace colout
     Pattern(
       BranchCtx bctx,
       std::regex reg,
-      std::vector<colout::Color> colors,
+      limited_array<ColorApplicator> colors,
       std::string esc_reset,
       F f
     )
     : mReg(std::move(reg))
-    , mColorGen(std::move(colors), bool(F::loop_color & f))
+    , mColorSelector(colors.size(), bool(F::loop_color & f))
+    , mColors(std::move(colors))
     , mEscReset(std::move(esc_reset))
     , mResetColor(!bool(F::keep_color & f))
     , mContinueFromLastColor(bool(F::continue_from_last_color & f))
@@ -86,22 +266,42 @@ namespace colout
     , mBCtx(bctx)
     {}
 
-    VisitorResult run(Scanner&, std::string& ctx, string_view sv)
+    VisitorResult run(Scanner& scanner, std::string& ctx, string_view sv)
     {
       std::size_t pos = 0;
+      std::size_t const ctx_sz_saved = ctx.size();
       bool const exists = std::regex_search(sv.begin(), sv.end(), mMatch, mReg);
 
       if (exists)
       {
+        auto apply_color = [&](size_t isub){
+          auto const new_pos = mMatch.position(isub);
+          auto const len = mMatch.length(isub);
+          ctx.append(begin(sv) + pos,      begin(sv) + new_pos);
+          if (!mColors[mColorSelector.next_idx()].apply(scanner, ctx, sv))
+          {
+            ctx.resize(ctx_sz_saved);
+            return false;
+          }
+          ctx.append(begin(sv) + new_pos,  begin(sv) + new_pos + len);
+          ctx.append(begin(mEscReset),     end(mEscReset));
+          pos = std::size_t(new_pos + len);
+          return true;
+        };
+
         if (!mReg.mark_count())
         {
-          pos = push_color(ctx, 0, pos, sv);
+          if (!apply_color(0)) {
+            return {false, mBCtx.nextIdFail, 0};
+          }
         }
         else
         {
-          for (size_t i = 1; i < mMatch.size(); ++i)
+          for (size_t i : range(1u, mMatch.size()))
           {
-            pos = push_color(ctx, i, pos, sv);
+            if (!apply_color(i)) {
+              return {false, mBCtx.nextIdFail, 0};
+            }
           }
 
           if (!mContinueFromLastColor)
@@ -114,13 +314,16 @@ namespace colout
 
         if (mEndColorMark)
         {
-          auto const & color = mColorGen.next_color();
-          ctx.append(begin(color), end(color));
+          if (!mColors[mColorSelector.next_idx()].apply(scanner, ctx, sv))
+          {
+            ctx.resize(ctx_sz_saved);
+            return {false, mBCtx.nextIdFail, 0};
+          }
         }
 
         if (mResetColor)
         {
-          mColorGen.reset();
+          mColorSelector.reset();
         }
       }
 
@@ -128,24 +331,10 @@ namespace colout
     }
 
   private:
-    std::size_t push_color(
-      std::string& ctx, size_t i, std::size_t pos, string_view sv
-    ) {
-      auto const new_pos = mMatch.position(i);
-      auto const len = mMatch.length(i);
-      auto const & color = mColorGen.next_color();
-      ctx
-        .append(begin(sv) + pos,      begin(sv) + new_pos)
-        .append(begin(color),         end(color))
-        .append(begin(sv) + new_pos,  begin(sv) + new_pos + len)
-        .append(begin(mEscReset),     end(mEscReset))
-      ;
-      return std::size_t(new_pos + len);
-    }
-
     std::regex mReg;
     std::cmatch mMatch;
-    ColorGen mColorGen;
+    ColorSelector mColorSelector;
+    limited_array<ColorApplicator> mColors;
     std::string mEscReset;
     bool mResetColor;
     bool mContinueFromLastColor;
@@ -183,10 +372,6 @@ namespace colout
     Pattern mPattern;
   };
 
-  class Scanner;
-
-  VisitorResult run_at(Scanner& scanner, int id, std::string& ctx, string_view sv);
-
   template<class Pattern>
   struct Group
   {
@@ -199,7 +384,7 @@ namespace colout
     VisitorResult run(Scanner& scanner, std::string& ctx, string_view sv)
     {
       std::size_t pos = 0;
-      std::size_t const s_sz = ctx.size();
+      std::size_t const ctx_sz_saved = ctx.size();
 
       auto res = mPattern.run(scanner, ctx, sv);
       while (res.nextId != -1)
@@ -215,7 +400,7 @@ namespace colout
       }
       else
       {
-        ctx.resize(s_sz);
+        ctx.resize(ctx_sz_saved);
         return {false, mBCtx.nextIdFail, 0};
       }
     }
@@ -303,82 +488,6 @@ namespace colout
   };
 
 
-  template<class T>
-  struct PlaceType
-  {
-    explicit PlaceType() = default;
-    using type = T;
-  };
-
-  template<class Ints, class... Ts>
-  struct indexedType;
-
-  template<class i, class T>
-  struct pairType {};
-
-  template<std::size_t... I, class... Ts>
-  struct indexedType<std::integer_sequence<std::size_t, I...>, Ts...>
-  : pairType<std::integral_constant<std::size_t, I>, Ts>...
-  {};
-
-  template<class T, class I>
-  I get_index_of(pairType<I, T>*);
-
-  template<class T, class... Ts>
-  using indexOf = decltype(get_index_of<T>(
-    static_cast<
-      indexedType<
-        std::index_sequence_for<Ts...>,
-        Ts...
-      >*
-    >(nullptr)
-  ));
-
-  template<class R, class T, class F>
-  struct PtrFuncHelper
-  {
-    static R impl(F&& f, void * d)
-    {
-      return f(*static_cast<T*>(d));
-    }
-  };
-
-  template<class T, class... Ts>
-  struct Variant
-  {
-    template<class U, class... Args>
-    Variant(PlaceType<U>, Args && ... args)
-    : idx_(indexOf<U, T, Ts...>::value)
-    {
-      new (&data_) U {std::forward<Args>(args)...};
-    }
-
-    Variant(Variant const &) = delete;
-    Variant operator=(Variant const &) = delete;
-
-    ~Variant()
-    {
-      visit([](auto & d) {
-        using D = std::remove_reference_t<decltype(d)>;
-        d.~D();
-      });
-    }
-
-    template<class F, class R = decltype(std::declval<F&&>()(std::declval<T&>()))>
-    R visit(F && f)
-    {
-      using proto = R(*)(F &&, void *);
-      static constexpr proto func_ptrs[]{
-        PtrFuncHelper<R, T, F>::impl,
-        PtrFuncHelper<R, Ts, F>::impl...
-      };
-      return func_ptrs[idx_](std::forward<F>(f), &data_);
-    }
-
-    typename std::aligned_union_t<0, T, Ts...>::type data_;
-    int idx_;
-  };
-
   struct Scanner
   {
     template<class... Ts>
@@ -394,10 +503,13 @@ namespace colout
       Call
     >
     {
+      FALCON_DIAGNOSTIC_PUSH
+      FALCON_DIAGNOSTIC_GCC_IGNORE("-Wuseless-cast")
       using Variant::Variant;
+      FALCON_DIAGNOSTIC_POP
     };
 
-    fixed_array<Element> elems;
+    limited_array<Element> elems;
   };
 
   VisitorResult run_at(Scanner& scanner, int id, std::string& ctx, string_view sv)
@@ -466,7 +578,7 @@ namespace colout
 
   inline Scanner make_scanner(std::vector<cli::ColoutParam> params)
   {
-    fixed_array<Scanner::Element> elems(params.size());
+    limited_array<Scanner::Element> elems(params.size());
 
     for (int const i : range(0, int(params.size())))
     {
@@ -516,16 +628,29 @@ namespace colout
         }
         else
         {
-          mk_maybe_loop(PlaceType<Pattern>{}, [&](auto t){
-            auto esc = std::move(param.esc2);
-            if (esc.empty()) {
-              esc = param.esc ? param.esc.c_str() : esc_reset.data();
+          auto esc = param.esc2.empty()
+            ? (param.esc ? param.esc.c_str() : esc_reset.data())
+            : std::move(param.esc2);
+
+          limited_array<ColorApplicator> colors(param.colors.size());
+          for (cli::ColorParam const & color :  param.colors)
+          {
+            if (color.id_label != -1)
+            {
+              colors.emplace_back(color.id_label);
             }
+            else
+            {
+              colors.emplace_back(color.color);
+            }
+          }
+
+          mk_maybe_loop(PlaceType<Pattern>{}, [&](auto t){
             elems.emplace_back(
               t,
               bctx,
               std::move(reg),
-              std::move(param.colors),
+              std::move(colors),
               std::move(esc),
               param.activated_flags
             );
@@ -571,7 +696,7 @@ int main(int ac, char ** av)
   for (cli::ColoutParam const & colout_param : colout_params)
   {
     std::cerr << i++ << "\n"
-      << "  r(" << bool(colout_param.activated_flags & F::regex_flags) << "): "
+      << "  r(" << bool(colout_param.activated_flags & F::regex) << "): "
       << colout_param.regex << "\n"
       << "  loop: " << bool(colout_param.activated_flags & F::loop_flags)
       << "  sub: " << bool(colout_param.activated_flags & F::next_is_sub)

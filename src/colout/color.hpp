@@ -74,9 +74,6 @@ namespace colout
 
     using const_iterator = std::string::const_iterator;
 
-    const_iterator begin() const { return cmd_.begin(); }
-    const_iterator end() const { return cmd_.end(); }
-
     const std::string & str() const noexcept { return cmd_; }
     std::string str_move() noexcept { return std::move(cmd_); }
   };

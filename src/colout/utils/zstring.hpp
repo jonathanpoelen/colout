@@ -43,6 +43,11 @@ struct zstring
     return s;
   }
 
+  void clear()
+  {
+    s = nullptr;
+  }
+
 private:
   char const * s = nullptr;
 };

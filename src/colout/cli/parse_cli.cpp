@@ -1,5 +1,36 @@
+/* The MIT License (MIT)
+
+Copyright (c) 2016 jonathan poelen
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+*/
+
+/**
+* \author    Jonathan Poelen <jonathan.poelen@gmail.com>
+* \version   0.1
+* \brief
+*/
+
+#include "colout/palette.hpp"
 #include "colout/cli/parse_cli.hpp"
 #include "colout/cli/parse_colors.hpp"
+#include "colout/utils/range.hpp"
 
 #include <falcon/cxx/cxx.hpp>
 
@@ -83,13 +114,19 @@ struct CliParam
   F f;
 };
 
+
+using S = std::string;
+//using F = ActiveFlags;
+using CStr = char const*;
+//using Param = ColoutParam;
+
 inline int parse_cli(
   GlobalParam& globalParam,
   ColoutParam& coloutParam,
   int ac, char const* const* av
 ) {
   auto cli_flag = [](char c, zstring zstr, zstring help, ActiveFlags f) {
-    auto lbd = [f](ColoutParam& coloutParam, char const*){
+    auto lbd = [f](ColoutParam& coloutParam, CStr){
       coloutParam.activated_flags |= f;
     };
     return CliParam<decltype(lbd), 0>{c, zstr, help, lbd};
@@ -109,7 +146,6 @@ inline int parse_cli(
     };
   }(
     cli_flag('h', "help", "", ActiveFlags::help),
-    cli_flag('l', "line", "", ActiveFlags::line_mode),
     cli_flag('w', "loop", "", ActiveFlags::loop_regex),
     cli_flag('c', "loop-color", "", ActiveFlags::loop_color),
     cli_flag('k', "keep-colormap", "", ActiveFlags::keep_color),
@@ -122,28 +158,34 @@ inline int parse_cli(
     cli_flag('i', "ignore-case", "", ActiveFlags::ignore_case),
     // TODO restart group '( x , y , z , --restart )'
 
-    // TODO -P, --select-regex=
-    // a -> ^.*$
-    // A -> ^.+$
-    // i -> integer
-    // f f. -> float
-    // f, -> float with comma
-    // < ( [ -> group with depth
-    // % -> integer and %
-    // %. -> float and %
-    // %, -> float with comma and %
-    // u u. u, -> with unit ("123G blah" -> "123G")
-    // , ] ) > -> until X with depth
-    // ' ' -> until ' ', \t
-    // :xxx -> user predefined pattern
-    cli_flag('I', "regex-int", "", ActiveFlags::regex_int),
-    cli_flag('f', "regex-float", "", ActiveFlags::regex_float),
+    cli_optv('P', "predefined-regex", "", [](ColoutParam& coloutParam, CStr s){
+      if (0);
+      #define M(n, S, d) else if (strcmp(S, s) == 0) \
+        coloutParam.predefined_regex = PredefinedRegex::n;
+      COLOUT_CLI_PREDEFINED_REGEX_VISITOR(M)
+      #undef M
+      else {
+        // TODO user regex
+        throw runtime_cli_error{S(s) + ": bad predefined-regex name"};
+      }
+      coloutParam.activated_flags |= ActiveFlags::regex;
+      coloutParam.regex.clear();
+    }),
 
-    cli_optv('r', "no-color-reset", "", [](ColoutParam& coloutParam, char const*){
+    cli_optv('l', "line", "", [](ColoutParam& coloutParam, CStr){
+      coloutParam.activated_flags |=
+        ActiveFlags::keep_color
+      | ActiveFlags::regex
+      ;
+      coloutParam.predefined_regex = PredefinedRegex::all;
+      coloutParam.regex.clear();
+    }),
+
+    cli_optv('r', "no-color-reset", "", [](ColoutParam& coloutParam, CStr){
       coloutParam.esc = "";
       coloutParam.esc2.clear();
     }),
-    cli_optv('K', "set-normal-color", "", [](ColoutParam& coloutParam, char const* s){
+    cli_optv('K', "set-normal-color", "", [](ColoutParam& coloutParam, CStr s){
       if (*s) {
         coloutParam.esc = "";
         coloutParam.esc2.clear();
@@ -155,54 +197,59 @@ inline int parse_cli(
       }
     }),
 
-    cli_optv('p', "regex", "", [](ColoutParam& coloutParam, char const* s){
+    cli_optv('p', "regex", "", [](ColoutParam& coloutParam, CStr s){
       coloutParam.regex = s;
       coloutParam.activated_flags |= ActiveFlags::regex;
+      coloutParam.predefined_regex = PredefinedRegex::none;
     }),
 
-    cli_optv('s', "scale", "", [](ColoutParam& coloutParam, char const* s){
+    cli_optv('s', "scale", "", [](ColoutParam& coloutParam, CStr s){
+      // TODO auto-scale x or x,x or x+20,x-22
       cli_set_int(coloutParam.scale_min, s, ',');
       cli_set_int(coloutParam.scale_max, s);
-      CLI_ERR_IF(coloutParam.scale_min >= coloutParam.scale_max, "min is greater than max");
+      CLI_ERR_IF(
+        coloutParam.scale_min >= coloutParam.scale_max,
+        "min is greater than max"
+      );
       coloutParam.activated_flags |= ActiveFlags::scale;
     }),
-    cli_optv('u', "units", "", [](ColoutParam& coloutParam, char const* s){
+    cli_optv('u', "units", "", [](ColoutParam& coloutParam, CStr s){
       CLI_ERR_IF(!*s, "is empty");
       CLI_ERR_IF(coloutParam.has_units(), "there are already units");
       coloutParam.activated_flags |= ActiveFlags::scale;
       coloutParam.units = s;
     }),
-    cli_optv('U', "units-expr", "", [](ColoutParam& coloutParam, char const* s){
+    cli_optv('U', "units-expr", "", [](ColoutParam& coloutParam, CStr s){
       CLI_ERR_IF(!*s, "is empty");
       CLI_ERR_IF(coloutParam.has_units(), "there are already units");
       coloutParam.activated_flags |= ActiveFlags::scale;
       // TODO
     }),
-    cli_optv('E', "coeff", "", [](ColoutParam& coloutParam, char const* s){
+    cli_optv('E', "coeff", "", [](ColoutParam& coloutParam, CStr s){
       cli_set_int(coloutParam.unit_coeff, s);
       coloutParam.activated_flags |= ActiveFlags::scale;
     }),
-    cli_optv('g', "group", "", [](ColoutParam& coloutParam, char const* s){
+    cli_optv('g', "group", "", [](ColoutParam& coloutParam, CStr s){
       cli_set_int(coloutParam.scale_match, s);
       coloutParam.activated_flags |= ActiveFlags::scale;
     }),
-    cli_optv('S', "select-unit", "", [](ColoutParam& coloutParam, char const* s){
+    cli_optv('S', "select-unit", "", [](ColoutParam& coloutParam, CStr s){
       // TODO
       coloutParam.activated_flags |= ActiveFlags::scale;
     }),
 
-    cli_optv('B', "regex-prefix", "", [](ColoutParam& coloutParam, char const* s){
+    cli_optv('B', "regex-prefix", "", [](ColoutParam& coloutParam, CStr s){
       coloutParam.regex_prefix = s;
     }),
-    cli_optv('A', "regex-suffix", "", [](ColoutParam& coloutParam, char const* s){
+    cli_optv('A', "regex-suffix", "", [](ColoutParam& coloutParam, CStr s){
       coloutParam.regex_suffix = s;
     }),
 
-    cli_optv('W', "n-loop", "", [](ColoutParam& coloutParam, char const* s){
+    cli_optv('W', "n-loop", "", [](ColoutParam& coloutParam, CStr s){
       cli_set_int(coloutParam.n_loop, s);
       coloutParam.activated_flags |= ActiveFlags::set_n_loop;
     }),
-    cli_optv('T', "regex-type", "", [](ColoutParam& coloutParam, char const* s){
+    cli_optv('T', "regex-type", "", [](ColoutParam& coloutParam, CStr s){
       #define elif(name, value) else if (0 == strcmp(s, #name)) \
       coloutParam.regex_type = std::regex_constants::value
       if (0) {}
@@ -216,44 +263,47 @@ inline int parse_cli(
       elif(grep, grep);
       elif(egrep, egrep);
       #undef elif
+      // TODO perl, string, ...
       else CLI_ERR_IF(1, "bad value");
     }),
-    cli_optv('t', "theme", "", [](ColoutParam& coloutParam, char const* s){
+    cli_optv('t', "theme", "", [](ColoutParam& coloutParam, CStr s){
       // TODO
     }),
-    cli_optv('L', "list", "", [](ColoutParam& coloutParam, char const* s){
+    cli_optv('L', "list", "", [](ColoutParam& coloutParam, CStr s){
       // TODO
     }),
-    cli_optv('a', "label", "", [](ColoutParam& coloutParam, char const* s){
+    cli_optv('a', "label", "", [](ColoutParam& coloutParam, CStr s){
       CLI_ERR_IF(!*s, "is empty");
       coloutParam.label = s;
     }),
-    cli_optv('G', "goto-label", "", [](ColoutParam& coloutParam, char const* s){
+    cli_optv('G', "goto-label", "", [](ColoutParam& coloutParam, CStr s){
       CLI_ERR_IF(!*s, "is empty");
       coloutParam.activated_flags &= ~ActiveFlags::jump_flags;
       coloutParam.activated_flags |= ActiveFlags::goto_label;
       coloutParam.go_label = s;
     }),
-    cli_optv('C', "call-label", "", [](ColoutParam& coloutParam, char const* s){
+    cli_optv('C', "call-label", "", [](ColoutParam& coloutParam, CStr s){
       CLI_ERR_IF(!*s, "is empty");
       coloutParam.activated_flags &= ~ActiveFlags::jump_flags;
       coloutParam.activated_flags |= ActiveFlags::call_label;
       coloutParam.go_label = s;
     }),
-    cli_optv('d', "delimiter", "", [](GlobalParam& globalParam, char const* s){
+    cli_optv('d', "delimiter", "", [](GlobalParam& globalParam, CStr s){
       CLI_ERR_IF(!*s, "is empty");
       CLI_ERR_IF(s[1], "too long");
       globalParam.delim_style = *s;
     }),
-    cli_optv('O', "locale", "", [](ColoutParam& coloutParam, char const* s){
+    cli_optv('O', "locale", "", [](ColoutParam& coloutParam, CStr s){
       // TODO
     }),
-    cli_optv('\0', "continue-from-last-color", "", [](ColoutParam& coloutParam, char const* s){
+    cli_optv('\0', "continue-from-last-color", "", [](ColoutParam& coloutParam, CStr s){
       // TODO
     }),
-    cli_optv('\0', "end-color-mark", "", [](ColoutParam& coloutParam, char const* s){
+    cli_optv('\0', "end-color-mark", "", [](ColoutParam& coloutParam, CStr s){
       // TODO
     })
+    // tag, push, pop, gpush, spush, repush
+    // =, <, >, eq, lt, gt
   );
 
   FALCON_DIAGNOSTIC_POP
@@ -308,7 +358,7 @@ inline int parse_cli(
               if (opt.has_value) {
                 CLI_ERR_IF(
                   optint+1 == ac,
-                  std::string("`--") + zview.c_str() + "` requires a value"
+                  S("`--") + zview.c_str() + "` requires a value"
                 );
                 opt.f(values_ctx, av[optint+1]);
                 ++optint;
@@ -340,7 +390,7 @@ inline int parse_cli(
                   }
                   CLI_ERR_IF(
                     optint+1 == ac,
-                    std::string("-`") + opt.c + "` requires a value"
+                    S("-`") + opt.c + "` requires a value"
                   );
                   opt.f(values_ctx, av[optint+1]);
                   return State::ok_arg;
@@ -398,7 +448,7 @@ struct Labels
     auto p = std::adjacent_find(labels.begin(), labels.end(), cmp);
     CLI_ERR_IF(
       labels.end() != p,
-      std::string("Duplicated label ") + p->first.c_str()
+      S("Duplicated label ") + p->first.c_str()
     );
   }
 
@@ -410,7 +460,7 @@ struct Labels
     );
     CLI_ERR_IF(
       p == labels.end() || p->first != label,
-      std::string("Unknown label ") + label.c_str()
+      S("Unknown label ") + label.c_str()
     );
     return p->second;
   }
@@ -455,7 +505,7 @@ struct ColoutParamAst
     }
     auto & opt = current();
     unsigned iopen = sub_stack.back();
-    opt.activated_flags |= ActiveFlags::is_close;
+    opt.activated_flags |= ActiveFlags::is_closed;
     opt.bind_index = int(iopen);
     coloutParams[iopen].bind_index = int(coloutParams.size()) - 1u;
     sub_stack.pop_back();
@@ -475,6 +525,7 @@ struct ColoutParamAst
     // TODO cond opti
 
     Labels labels{coloutParams};
+    // TODO colors.labels
     for (ColoutParam & param : coloutParams) {
       if (param.go_label) {
         param.go_id = labels.find(param.go_label);
