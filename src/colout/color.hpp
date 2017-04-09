@@ -31,6 +31,7 @@ SOFTWARE.
 
 #include "colout/utils/string_view.hpp"
 
+#include <iosfwd>
 #include <string>
 #include <cstring>
 
@@ -77,6 +78,21 @@ namespace colout
     const std::string & str() const noexcept { return cmd_; }
     std::string str_move() noexcept { return std::move(cmd_); }
   };
+
+  template<class Ch, class Tr>
+  std::basic_ostream<Ch, Tr>&
+  operator<<(std::basic_ostream<Ch, Tr>& os, Color const& color)
+  {
+    for (char c : color.str()) {
+      if (c == '\x1b') {
+        os << "\\e";
+      }
+      else {
+        os << c;
+      }
+    }
+    return os;
+  }
 
   struct ColorBuilder
   {

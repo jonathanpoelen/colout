@@ -226,17 +226,22 @@ void parse_color(
   }
   // palette color
   else if (parse_palette == ParsePalette::Yes) {
-    if (color[0] == ':') {
-      colors.emplace_back(std::string(color.begin(), color.end()));
-      return ;
-    }
-
     PaletteRef palette = palettes.get(color, plan);
     if (palette.empty()) {
-      throw_unknown_color(color);
+      if (color[0] == ':') {
+        colors.emplace_back(
+          std::string(color.begin()+1, color.end()),
+          ColorParam::label_category
+        );
+      }
+      else {
+        colors.emplace_back(
+          std::string(color.begin(), color.end()),
+          ColorParam::theme_category
+        );
+      }
     }
-
-    if (palette.size() == 1) {
+    else if (palette.size() == 1) {
       builder.push_palette(palette[0]);
     }
     else {

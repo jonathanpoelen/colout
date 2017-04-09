@@ -38,6 +38,15 @@ SOFTWARE.
 #include <iostream>
 #include <iterator>
 
+#ifndef IN_IDE_PARSER
+template<class... T>
+#endif
+void TRACE(T const&... args)
+{
+  FALCON_UNPACK(std::cerr << args);
+  std::cerr << "\n";
+}
+
 
 using std::begin;
 using std::end;
@@ -278,12 +287,12 @@ namespace colout
           auto const new_pos = mMatch.position(isub);
           auto const len = mMatch.length(isub);
           ctx.append(begin(sv) + pos,      begin(sv) + new_pos);
-          if (!mColors[mColorSelector.next_idx()].apply(scanner, ctx, sv))
+          if (!mColors[mColorSelector.next_idx()]
+            .apply(scanner, ctx, sv.substr(new_pos, len)))
           {
             ctx.resize(ctx_sz_saved);
             return false;
           }
-          ctx.append(begin(sv) + new_pos,  begin(sv) + new_pos + len);
           ctx.append(begin(mEscReset),     end(mEscReset));
           pos = std::size_t(new_pos + len);
           return true;
@@ -504,7 +513,7 @@ namespace colout
     >
     {
       FALCON_DIAGNOSTIC_PUSH
-      FALCON_DIAGNOSTIC_GCC_IGNORE("-Wuseless-cast")
+      FALCON_DIAGNOSTIC_GCC_ONLY_IGNORE("-Wuseless-cast")
       using Variant::Variant;
       FALCON_DIAGNOSTIC_POP
     };
@@ -515,7 +524,7 @@ namespace colout
   VisitorResult run_at(Scanner& scanner, int id, std::string& ctx, string_view sv)
   {
     assert(id != -1);
-    std::cerr << id << " " << sv << "\n";
+    TRACE("run_at: ", id, " ", sv);
     return scanner.elems[id].visit([&](auto & p){
       return p.run(scanner, ctx, sv);
     });
@@ -628,19 +637,19 @@ namespace colout
         }
         else
         {
-          auto esc = param.esc2.empty()
-            ? (param.esc ? param.esc.c_str() : esc_reset.data())
-            : std::move(param.esc2);
-
           limited_array<ColorApplicator> colors(param.colors.size());
+          TRACE("color.sz: ", param.colors.size());
+          assert(param.colors.size());
           for (cli::ColorParam const & color :  param.colors)
           {
             if (color.id_label != -1)
             {
+              TRACE("color.label: ", color.id_label);
               colors.emplace_back(color.id_label);
             }
             else
             {
+              TRACE("color.color: ", color.color);
               colors.emplace_back(color.color);
             }
           }
@@ -651,7 +660,9 @@ namespace colout
               bctx,
               std::move(reg),
               std::move(colors),
-              std::move(esc),
+              bool(F::set_reset_color & param.activated_flags)
+                ? std::move(param.esc)
+                : esc_reset.data(),
               param.activated_flags
             );
           });

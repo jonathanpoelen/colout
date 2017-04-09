@@ -47,7 +47,7 @@ namespace cli {
   {
     none,
     regex = (1 << 0),
-    //predefined_regex = (1 << 1),
+    set_reset_color = (1 << 1),
     continue_from_last_color = (1 << 2),
     loop_color = (1 << 3),
     keep_color = (1 << 4),
@@ -63,7 +63,7 @@ namespace cli {
     scale_log = (1 << 12),
     scale_exp = (1 << 13),
     scale_div = (1 << 14),
-    //invert_loop = (1 << 15),
+    //continue_from_last_color = (1 << 15),
     ignore_case = (1 << 16),
     end_color_mark = (1 << 17),
     scale = (1 << 18),
@@ -135,16 +135,26 @@ namespace cli
 
   struct ColorParam
   {
+    enum Category {
+      theme_category = -3,
+      label_category = -2,
+      color_category = -1,
+    };
     Color color; // variant<Color, int>
-    int id_label = -1;
+    int id_label = color_category;
 
-    ColorParam(std::string label) noexcept
+    ColorParam(std::string label, Category category) noexcept
     : color{std::move(label)}
+    , id_label(category)
     {}
 
     ColorParam(Color color) noexcept
     : color(std::move(color))
     {}
+
+    bool is_theme_category() const { return id_label == theme_category; }
+    bool is_label_category() const { return id_label == label_category; }
+    bool is_color_category() const { return id_label == color_category; }
   };
 
   struct GlobalParam
@@ -162,15 +172,12 @@ namespace cli
     ActiveFlags activated_flags = ActiveFlags::none;
     std::regex_constants::syntax_option_type regex_type = std::regex_constants::ECMAScript;
     PredefinedRegex predefined_regex = PredefinedRegex::none;
-    zstring regex;
-    zstring regex_prefix;
-    zstring regex_suffix;
-    zstring label;
-    zstring go_label;
-    zstring units;
-    zstring locale;
-    zstring esc;
-    std::string esc2;
+    std::string regex;
+    std::string label;
+    std::string go_label;
+    std::string units;
+    std::string locale;
+    std::string esc;
     std::vector<Units> def_units;
     std::vector<ColorParam> colors;
     int n_loop = -1;
@@ -182,7 +189,7 @@ namespace cli
     int go_id = -1; // only if go_label is defined
 
     bool has_units() {
-      return !def_units.empty() || units;
+      return !def_units.empty() || !units.empty();
     }
   };
 

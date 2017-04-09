@@ -73,6 +73,14 @@ namespace colout
       return string_view{s_ + pos, s_ + n_};
     }
 
+    constexpr string_view
+    substr(std::size_t pos, std::size_t count) const
+    {
+      assert(pos <= n_);
+      assert(pos + count <= n_);
+      return string_view{s_ + pos, s_ + pos + count};
+    }
+
     constexpr char operator[](std::size_t i) const noexcept { return s_[i]; }
     constexpr std::size_t size() const noexcept { return n_; }
     constexpr bool empty() const noexcept { return !n_; }

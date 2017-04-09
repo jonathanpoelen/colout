@@ -35,6 +35,7 @@ SOFTWARE.
 #include <falcon/cxx/cxx.hpp>
 
 #include <iostream>
+#include <fstream>
 #include <limits>
 
 #include <cstdlib>
@@ -181,19 +182,19 @@ inline int parse_cli(
       coloutParam.regex.clear();
     }),
 
-    cli_optv('r', "no-color-reset", "", [](ColoutParam& coloutParam, CStr){
-      coloutParam.esc = "";
-      coloutParam.esc2.clear();
+    cli_optv('r', "no-reset-color", "", [](ColoutParam& coloutParam, CStr){
+      coloutParam.activated_flags |= ActiveFlags::set_reset_color;
+      coloutParam.esc.clear();
     }),
     cli_optv('K', "set-normal-color", "", [](ColoutParam& coloutParam, CStr s){
+      coloutParam.activated_flags |= ActiveFlags::set_reset_color;
       if (*s) {
-        coloutParam.esc = "";
-        coloutParam.esc2.clear();
+        coloutParam.esc.clear();
       }
       else {
         ColorBuilder builder;
         parse_color(builder, {s, strlen(s)});
-        coloutParam.esc2 = builder.get_color_and_clear().str_move();
+        coloutParam.esc = builder.get_color_and_clear().str_move();
       }
     }),
 
@@ -236,13 +237,6 @@ inline int parse_cli(
     cli_optv('S', "select-unit", "", [](ColoutParam& coloutParam, CStr s){
       // TODO
       coloutParam.activated_flags |= ActiveFlags::scale;
-    }),
-
-    cli_optv('B', "regex-prefix", "", [](ColoutParam& coloutParam, CStr s){
-      coloutParam.regex_prefix = s;
-    }),
-    cli_optv('A', "regex-suffix", "", [](ColoutParam& coloutParam, CStr s){
-      coloutParam.regex_suffix = s;
     }),
 
     cli_optv('W', "n-loop", "", [](ColoutParam& coloutParam, CStr s){
@@ -294,13 +288,15 @@ inline int parse_cli(
       globalParam.delim_style = *s;
     }),
     cli_optv('O', "locale", "", [](ColoutParam& coloutParam, CStr s){
-      // TODO
+      if (*s) {
+        coloutParam.locale = s;
+      }
     }),
-    cli_optv('\0', "continue-from-last-color", "", [](ColoutParam& coloutParam, CStr s){
-      // TODO
+    cli_optv('\0', "continue-from-last-color", "", [](ColoutParam& coloutParam, CStr){
+      coloutParam.activated_flags |= ActiveFlags::continue_from_last_color;
     }),
     cli_optv('\0', "end-color-mark", "", [](ColoutParam& coloutParam, CStr s){
-      // TODO
+      coloutParam.activated_flags |= ActiveFlags::end_color_mark;
     })
     // tag, push, pop, gpush, spush, repush
     // =, <, >, eq, lt, gt
@@ -425,42 +421,43 @@ inline int parse_cli(
 
 struct Labels
 {
-  using Pair = std::pair<zstring, int>;
+  using Pair = std::pair<std::reference_wrapper<std::string const>, int>;
   struct Less
   {
     bool operator()(Pair const & a, Pair const & b) const
     {
-      return a.first < b.first;
-    };
+      return a.first.get() < b.first.get();
+    }
   };
 
   Labels(std::vector<cli::ColoutParam> const & coloutParams)
   {
     for (std::size_t i = 0; i < coloutParams.size(); ++i) {
-      if (zstring const label{coloutParams[i].label}) {
+      std::string const & label = coloutParams[i].label;
+      if (label.size()) {
         labels.emplace_back(label, int(i));
       }
     }
 
     std::sort(labels.begin(), labels.end(), Less{});
 
-    auto cmp = [](auto& a, auto& b){ return a.first == b.first; };
+    auto cmp = [](auto& a, auto& b){ return a.first.get() == b.first.get(); };
     auto p = std::adjacent_find(labels.begin(), labels.end(), cmp);
     CLI_ERR_IF(
       labels.end() != p,
-      S("Duplicated label ") + p->first.c_str()
+      "Duplicated label " + p->first.get()
     );
   }
 
-  int find(zstring label) const
+  int find(std::string const & label) const
   {
     auto p = std::lower_bound(
       labels.begin(), labels.end(),
       Pair{label, 0}, Less{}
     );
     CLI_ERR_IF(
-      p == labels.end() || p->first != label,
-      S("Unknown label ") + label.c_str()
+      p == labels.end() || p->first.get() != label,
+      "Unknown label " + label
     );
     return p->second;
   }
@@ -469,11 +466,31 @@ private:
   std::vector<Pair> labels;
 };
 
+class ColoutParamAst;
+
+struct Themes
+{
+  Themes(ColoutParamAst & ast)
+  : ast_(ast)
+  {}
+
+  int get_id_or_load(std::string name);
+
+private:
+  std::vector<std::pair<std::string, int>> themes_;
+  ColoutParamAst & ast_;
+};
+
 struct ColoutParamAst
 {
   std::vector<ColoutParam> coloutParams;
+  colout::ColorBuilder colorBuilder;
+  colout::Palettes palettes;
+
+private:
   std::vector<unsigned> sub_stack;
 
+public:
   ColoutParam& new_element()
   {
     coloutParams.emplace_back();
@@ -503,6 +520,7 @@ struct ColoutParamAst
     if (sub_stack.empty()) {
       throw runtime_cli_error("mismatching ')'");
     }
+    check_no_wait_next();
     auto & opt = current();
     unsigned iopen = sub_stack.back();
     opt.activated_flags |= ActiveFlags::is_closed;
@@ -510,6 +528,14 @@ struct ColoutParamAst
     coloutParams[iopen].bind_index = int(coloutParams.size()) - 1u;
     sub_stack.pop_back();
     return iopen;
+  }
+
+  void check_no_wait_next()
+  {
+    constexpr auto f = ActiveFlags::next_is_alt | ActiveFlags::next_is_seq;
+    if (bool(f & coloutParams.back().activated_flags)) {
+      throw runtime_cli_error("| or , not followed by a pattern");
+    }
   }
 
   void final()
@@ -522,13 +548,22 @@ struct ColoutParamAst
       return ;
     }
 
-    // TODO cond opti
+    check_no_wait_next();
+
+    Themes themes{*this};
 
     Labels labels{coloutParams};
-    // TODO colors.labels
     for (ColoutParam & param : coloutParams) {
-      if (param.go_label) {
+      if (param.go_label.size()) {
         param.go_id = labels.find(param.go_label);
+      }
+      for (ColorParam & c : param.colors) {
+        if (c.is_label_category()) {
+          c.id_label = labels.find(c.color.str());
+        }
+        else if (c.is_theme_category()) {
+          c.id_label = themes.get_id_or_load(std::move(c.color.str()));
+        }
       }
     }
   }
@@ -554,13 +589,123 @@ private:
   char const*const* last_;
 };
 
+void colout_parse_cli_impl(ColoutParamAst & ast, Args args);
+
+/**
+ * \return errno or 0
+ */
+template<class String>
+int get_file_contents(String& s, const char * name)
+{
+  typedef typename String::value_type char_type;
+  typedef typename String::traits_type traits_type;
+
+  std::basic_filebuf<char_type, traits_type> buf;
+
+  char_type c;
+  buf.pubsetbuf(&c, 1);
+
+  if (!buf.open(name, std::ios::in)) {
+    return errno;
+  }
+
+  const std::streamsize sz = buf.in_avail();
+  if (sz == std::streamsize(-1)) {
+    return errno;
+  }
+
+  s.resize(std::size_t(sz));
+  const std::streamsize n = buf.sgetn(&s[0], sz);
+  return (sz != n) ? s.resize(std::size_t(n)), errno : 0;
+}
+
+
+struct String
+{
+  using value_type = char;
+  using traits_type = std::char_traits<char>;
+
+  void resize(std::size_t n)
+  {
+    if (!d) {
+      d.reset(new char[n+1]);
+      sz = n;
+    }
+  }
+  char& operator[](std::size_t i)
+  {
+    return d[i];
+  }
+
+  std::size_t size() const { return sz; }
+  char * data() const { return d.get(); }
+
+private:
+  std::unique_ptr<char[]> d;
+  std::size_t sz = 0;
+};
+
+int Themes::get_id_or_load(std::string name)
+{
+  for (auto && p : themes_) {
+    if (p.first == name) {
+      return p.second;
+    }
+  }
+
+  String s;
+  CLI_ERR_IF(
+    int err = get_file_contents(s, name.c_str()),
+    name + ": " + strerror(err)
+  );
+
+  auto p = reinterpret_cast<unsigned char*>(s.data());
+  auto e = p + s.size();
+  std::vector<char const *> v;
+
+  static constexpr bool t[255]{
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    1,
+  };
+  auto skip = [&p, e]{
+    while (p != e && t[*p]) {
+      ++p;
+    }
+  };
+  auto rskip = [&p, e]{
+    while (p != e && !t[*p]) {
+      ++p;
+    }
+  };
+
+  skip();
+  while (p < e) {
+    skip();
+    v.emplace_back(reinterpret_cast<char const*>(p));
+    rskip();
+    *p = '\0';
+    ++p;
+  }
+
+  int ret = int(ast_.coloutParams.size());
+  colout_parse_cli_impl(ast_, {int(v.size()), v.data()});
+  return ret;
+}
+
 std::vector<ColoutParam> colout_parse_cli(int ac, char const* const* av)
 {
   Args args{ac, av};
   args.next(); // ignore program name
   ColoutParamAst ast;
-  colout::Palettes palettes;
-  colout::ColorBuilder colorBuilder;
+  colout_parse_cli_impl(ast, args);
+  // TODO check option
+  ast.final();
+  return std::move(ast.coloutParams);
+}
+
+void colout_parse_cli_impl(ColoutParamAst & ast, Args args)
+{
   GlobalParam globalParam;
 
   while (args.is_valid()) {
@@ -640,7 +785,7 @@ std::vector<ColoutParam> colout_parse_cli(int ac, char const* const* av)
       return false;
     };
 
-    if (coloutParam.go_label && exec_sep(s)) {
+    if (coloutParam.go_label.size() && exec_sep(s)) {
       continue;
     }
 
@@ -657,20 +802,14 @@ std::vector<ColoutParam> colout_parse_cli(int ac, char const* const* av)
       }
 
       parse_colors(
-        colorBuilder,
+        ast.colorBuilder,
         coloutParam.colors,
         s,
-        palettes,
+        ast.palettes,
         globalParam.delim_style
       );
     }
   }
-
-  // TODO check option
-
-  ast.final();
-
-  return std::move(ast.coloutParams);
 }
 
 } }
