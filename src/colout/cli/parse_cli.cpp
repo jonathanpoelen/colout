@@ -261,7 +261,9 @@ inline int parse_cli(
       else CLI_ERR_IF(1, "bad value");
     }),
     cli_optv('t', "theme", "", [](ColoutParam& coloutParam, CStr s){
-      // TODO
+      CLI_ERR_IF(!*s, "is empty");
+      coloutParam.activated_flags |= ActiveFlags::theme;
+      coloutParam.go_label = s;
     }),
     cli_optv('L', "list", "", [](ColoutParam& coloutParam, CStr s){
       // TODO
@@ -298,8 +300,8 @@ inline int parse_cli(
     cli_optv('\0', "end-color-mark", "", [](ColoutParam& coloutParam, CStr s){
       coloutParam.activated_flags |= ActiveFlags::end_color_mark;
     })
-    // tag, push, pop, gpush, spush, repush
-    // =, <, >, eq, lt, gt
+    // TODO tag, push, pop, gpush, spush, repush
+    // TODO =, <, >, eq, lt, gt
   );
 
   FALCON_DIAGNOSTIC_POP
@@ -553,19 +555,45 @@ public:
     Themes themes{*this};
 
     Labels labels{coloutParams};
-    for (ColoutParam & param : coloutParams) {
-      if (param.go_label.size()) {
-        param.go_id = labels.find(param.go_label);
-      }
-      for (ColorParam & c : param.colors) {
-        if (c.is_label_category()) {
-          c.id_label = labels.find(c.color.str());
+    auto first = begin(coloutParams);
+    auto last = end(coloutParams);
+    auto load_theme = [&](std::string && theme_name){
+        auto const param_sz = coloutParams.size();
+        // /!\ may invalidate first and last iterators
+        auto const id = themes.get_id_or_load(std::move(theme_name));
+        if (param_sz < coloutParams.size()) {
+          labels = Labels{coloutParams}; // PERF
+          first = begin(coloutParams) + (last - first);
+          last = end(coloutParams);
         }
-        else if (c.is_theme_category()) {
-          c.id_label = themes.get_id_or_load(std::move(c.color.str()));
+        return id;
+    };
+    for (; first != last; ++first) {
+      ColoutParam & param = *first;
+      if (bool(param.activated_flags & ActiveFlags::theme)) {
+        param.activated_flags &= ~ActiveFlags::theme;
+        param.activated_flags |= ActiveFlags::call_label;
+        param.go_id = load_theme(std::move(param.go_label));
+      }
+      else {
+        if (param.go_label.size()) {
+          param.go_id = labels.find(param.go_label);
+        }
+        // /!\ iterators may be invalidate by load_theme
+        for (auto i : range(0u, param.colors.size())) {
+          ColorParam & c = first->colors[i];
+          if (c.is_label_category()) {
+            c.id_label = labels.find(c.color.str());
+          }
+          else if (c.is_theme_category()) {
+            auto id = load_theme(c.color.str_move());
+            first->colors[i].id_label = id;
+          }
         }
       }
     }
+
+    // TODO optimize go_id (jump and call)
   }
 };
 
@@ -720,7 +748,9 @@ void colout_parse_cli_impl(ColoutParamAst & ast, Args args)
 
     if (!args.is_valid()) {
       std::cout << "error: " << optint << "\n";
-      // TODO error
+      // TODO error, except label, regex, theme
+      // TODO default color
+      break;
     }
 
     auto s = args.current();
@@ -794,6 +824,8 @@ void colout_parse_cli_impl(ColoutParamAst & ast, Args args)
       coloutParam.regex = s;
       args.next();
     }
+
+    // TODO default color
 
     for (; args.is_valid(); args.next()) {
       s = args.current();

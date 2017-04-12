@@ -63,7 +63,7 @@ namespace cli {
     scale_log = (1 << 12),
     scale_exp = (1 << 13),
     scale_div = (1 << 14),
-    //continue_from_last_color = (1 << 15),
+    theme = (1 << 15),
     ignore_case = (1 << 16),
     end_color_mark = (1 << 17),
     scale = (1 << 18),
