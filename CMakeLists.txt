@@ -19,6 +19,7 @@ endif()
 
 include_directories(src/)
 include_directories(modules/falcon.cxx/include/)
+include_directories(modules/variant/include)
 
 # aux_source_directory(. SRC_LIST)
 # file(GLOB headers_SRC "*.hpp")

@@ -38,6 +38,8 @@ SOFTWARE.
 #include <iostream>
 #include <iterator>
 
+#include <mpark/variant.hpp>
+
 #ifndef IN_IDE_PARSER
 template<class... T>
 #endif
@@ -56,104 +58,18 @@ namespace colout
   constexpr string_view esc_reset
     FALCON_IN_IDE_PARSER_CONDITIONAL(FALCON_PP_NIL, = "\033[0m"_sv);
 
-
-  // Variant
-  //@{
-  template<class T>
-  struct PlaceType
+  template<class Variant, class F, class... Args>
+  auto visit(Variant & v, F f, Args&&... args)
+  //-> decltype(f(mpark::get<0>(v), std::forward<Args>(args)...))
   {
-    explicit PlaceType() = default;
-    using type = T;
-  };
-
-  namespace detail
-  {
-    template<class Ints, class... Ts>
-    struct IndexedType;
-
-    template<class i, class T>
-    struct PairType {};
-
-    template<std::size_t... I, class... Ts>
-    struct IndexedType<std::integer_sequence<std::size_t, I...>, Ts...>
-    : PairType<std::integral_constant<std::size_t, I>, Ts>...
-    {};
-
-    template<class T, class I>
-    I get_index_of(PairType<I, T>*);
+    // hack: bypassing value check
+    return mpark::detail::visitation::variant::visit_value([&](auto & e){
+      return f(e, std::forward<Args>(args)...);
+    }, v);
   }
 
-  template<class T, class... Ts>
-  using indexOf = decltype(detail::get_index_of<T>(
-    static_cast<
-      detail::IndexedType<
-        std::index_sequence_for<Ts...>,
-        Ts...
-      >*
-    >(nullptr)
-  ));
-
-  template<class R, class F, class T, class... Args>
-  struct PtrFuncHelper
-  {
-    static R impl(F&& f, void * d, Args&&... args)
-    {
-      return f(*static_cast<T*>(d), std::forward<Args>(args)...);
-    }
-  };
-
-  template<class T, class... Ts>
-  struct Variant
-  {
-    template<class U, class... Args>
-    Variant(PlaceType<U>, Args && ... args)
-    : idx_(indexOf<U, T, Ts...>::value)
-    {
-      new (&data_) U {std::forward<Args>(args)...};
-    }
-
-    Variant(Variant && other)
-    : idx_(other.idx_)
-    {
-      other.visit([this, &other](auto & d) {
-        using U = std::remove_reference_t<decltype(d)>;
-        new (&this->data_) U {std::move(*static_cast<T*>(other.d))};
-      });
-    }
-
-    Variant(Variant const &) = delete;
-
-    Variant operator=(Variant const &) = delete;
-
-    ~Variant()
-    {
-      visit([](auto & d) {
-        using U = std::remove_reference_t<decltype(d)>;
-        d.~U();
-      });
-    }
-
-    template<
-      class F, class... Args,
-      class R = decltype(
-        std::declval<F&&>()(std::declval<T&>(), std::declval<Args&&>()...)
-      )
-    >
-    R visit(F && f, Args && ... args)
-    {
-      using proto = R(*)(F &&, void *, Args...);
-      static constexpr proto func_ptrs[]{
-        PtrFuncHelper<R, F, T, Args...>::impl,
-        PtrFuncHelper<R, F, Ts, Args...>::impl...
-      };
-      return func_ptrs[idx_](std::forward<F>(f), &data_, args...);
-    }
-
-    typename std::aligned_union_t<0, T, Ts...>::type data_;
-    int idx_;
-  };
-  //@}
-
+  using mpark::in_place_type_t;
+  using mpark::in_place_type;
 
   struct VisitorResult
   {
@@ -182,11 +98,11 @@ namespace colout
   struct ColorApplicator
   {
     ColorApplicator(Color color)
-    : mColorOrId(PlaceType<std::string>{}, color.str_move())
+    : mColorOrId(in_place_type_t<std::string>{}, color.str_move())
     {}
 
     ColorApplicator(int id)
-    : mColorOrId(PlaceType<int>{}, id)
+    : mColorOrId(in_place_type_t<int>{}, id)
     {}
 
     bool apply(Scanner& scanner, std::string& ctx, string_view sv)
@@ -219,11 +135,11 @@ namespace colout
           return res.isFound;
         }
       };
-      return mColorOrId.visit(Fns{}, scanner, ctx, sv);
+      return visit(mColorOrId, Fns{}, scanner, ctx, sv);
     }
 
   private:
-    Variant<std::string, int> mColorOrId;
+    mpark::variant<std::string, int> mColorOrId;
   };
 
   struct ColorSelector
@@ -500,9 +416,9 @@ namespace colout
   struct Scanner
   {
     template<class... Ts>
-    using Variant_ = Variant<Ts..., Loop<Ts>...>;
+    using variant = mpark::variant<Ts..., Loop<Ts>...>;
 
-    struct Element : Variant_<
+    struct Element : variant<
       Pattern,
       TestPattern,
       TestPatternAndCall,
@@ -514,7 +430,7 @@ namespace colout
     {
       FALCON_DIAGNOSTIC_PUSH
       FALCON_DIAGNOSTIC_GCC_ONLY_IGNORE("-Wuseless-cast")
-      using Variant::Variant;
+      using variant::variant;
       FALCON_DIAGNOSTIC_POP
     };
 
@@ -525,7 +441,7 @@ namespace colout
   {
     assert(id != -1);
     TRACE("run_at: ", id, " ", sv);
-    return scanner.elems[id].visit([&](auto & p){
+    return visit(scanner.elems[id], [&](auto & p){
       return p.run(scanner, ctx, sv);
     });
   }
@@ -582,8 +498,15 @@ namespace colout
     return -1;
   }
 
+  template<class>
+  struct extract_in_place_type;
+
   template<class T>
-  using t_ = typename T::type;
+  struct extract_in_place_type<mpark::in_place_type_t<T>>
+  { using type = T; };
+
+  template<class T>
+  using extract_in_place_type_t = typename extract_in_place_type<T>::type;
 
   inline Scanner make_scanner(std::vector<cli::ColoutParam> params)
   {
@@ -602,7 +525,7 @@ namespace colout
       auto mk_maybe_loop = [&](auto t, auto mk){
         if (bool(F::loop_regex & param.activated_flags))
         {
-          mk(PlaceType<Loop<t_<decltype(t)>>>{});
+          mk(in_place_type_t<Loop<extract_in_place_type_t<decltype(t)>>>{});
         }
         else
         {
@@ -616,7 +539,7 @@ namespace colout
 
         if (bool(F::next_is_sub & param.activated_flags))
         {
-          mk_maybe_loop(PlaceType<Group<TestPattern>>{}, [&](auto t){
+          mk_maybe_loop(in_place_type_t<Group<TestPattern>>{}, [&](auto t){
             elems.emplace_back(t, bctx, int(elems.size() + 1u), std::move(reg));
           });
         }
@@ -624,13 +547,13 @@ namespace colout
         {
           if (bool(F::call_label | param.activated_flags))
           {
-            mk_maybe_loop(PlaceType<TestPatternAndCall>{}, [&](auto t){
+            mk_maybe_loop(in_place_type_t<TestPatternAndCall>{}, [&](auto t){
               elems.emplace_back(t, bctx, param.go_id, std::move(reg));
             });
           }
           else
           {
-            mk_maybe_loop(PlaceType<TestPattern>{}, [&](auto t){
+            mk_maybe_loop(in_place_type_t<TestPattern>{}, [&](auto t){
               elems.emplace_back(t, param.go_id, std::move(reg));
             });
           }
@@ -654,7 +577,7 @@ namespace colout
             }
           }
 
-          mk_maybe_loop(PlaceType<Pattern>{}, [&](auto t){
+          mk_maybe_loop(in_place_type_t<Pattern>{}, [&](auto t){
             elems.emplace_back(
               t,
               bctx,
@@ -670,7 +593,7 @@ namespace colout
       }
       else if (bool(F::start_group & param.activated_flags))
       {
-        mk_maybe_loop(PlaceType<Group<Jump>>{}, [&](auto t){
+        mk_maybe_loop(in_place_type_t<Group<Jump>>{}, [&](auto t){
           elems.emplace_back(t, bctx, int(elems.size() + 1u));
         });
       }
@@ -678,13 +601,13 @@ namespace colout
       {
         if (bool(F::call_label | param.activated_flags))
         {
-          mk_maybe_loop(PlaceType<Call>{}, [&](auto t){
+          mk_maybe_loop(in_place_type_t<Call>{}, [&](auto t){
             elems.emplace_back(t, bctx, param.go_id);
           });
         }
         else
         {
-          mk_maybe_loop(PlaceType<Jump>{}, [&](auto t){
+          mk_maybe_loop(in_place_type_t<Jump>{}, [&](auto t){
             elems.emplace_back(t, param.go_id);
           });
         }

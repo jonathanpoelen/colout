@@ -8,6 +8,7 @@ rule includes ( property * )
 {
   return
     <include>modules/falcon.cxx/include
+    <include>modules/variant/include
     <include>$(ROOT_SRC_DIR)
   ;
 }
