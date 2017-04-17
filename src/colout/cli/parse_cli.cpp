@@ -158,6 +158,17 @@ inline int parse_cli(
     cli_flag('D', "div", "", ActiveFlags::scale | ActiveFlags::scale_div),
     cli_flag('i', "ignore-case", "", ActiveFlags::ignore_case),
     // TODO restart group '( x , y , z , --restart )'
+    // TODO break loop '( x , y , z , --break )'
+    // TODO --next-line
+    // TODO `:` separator: followed by the description of a label `next_is_label`
+    // TODO `::` separator: like `:`, with REGEX is a label name (implicit `-Pa`)
+    // TODO palette option (opt(s):palette/label) r=reverse, h=hash, s=scale
+    // TODO hash color (hash, h, h:), -H,--hash option `(.+):(\d+) hash y`
+    //      or `(.+):(\d+) :h y : -H -Pa -ah r g b`
+    //      or `(.+):(\d+) :h y :: -H h r g b`
+    //      or `(.+):(\d+) h::h y :: h r g b`
+    //      or `(.+):(\d+) h:[r g b] y`
+    // TODO scale by length
 
     cli_optv('P', "predefined-regex", "", [](ColoutParam& coloutParam, CStr s){
       if (0);
@@ -214,6 +225,9 @@ inline int parse_cli(
       );
       coloutParam.activated_flags |= ActiveFlags::scale;
     }),
+
+    // TODO overflow/underflow scale = label | color | '-' | ''
+
     cli_optv('u', "units", "", [](ColoutParam& coloutParam, CStr s){
       CLI_ERR_IF(!*s, "is empty");
       CLI_ERR_IF(coloutParam.has_units(), "there are already units");
@@ -351,7 +365,7 @@ inline int parse_cli(
         current_long_opt = &arg[0];
         for_each_options(
           [&zview, &values_ctx, &optint, ac, av](auto const & opt){
-            // TODO = support: --name=value
+            // TODO = support: --name=value and --name=
             if (opt.s == zview) {
               if (opt.has_value) {
                 CLI_ERR_IF(
