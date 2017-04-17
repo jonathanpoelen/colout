@@ -71,19 +71,30 @@ namespace colout
   using mpark::in_place_type_t;
   using mpark::in_place_type;
 
+  enum class ColoutIndex : int;
+  constexpr ColoutIndex invalidIndex = ColoutIndex(-1);
+  constexpr ColoutIndex zeroAsIndex = ColoutIndex(-1);
+
+  template<class Ch, class Tr>
+  std::basic_ostream<Ch, Tr>&
+  operator<<(std::basic_ostream<Ch, Tr>& out, ColoutIndex const & i)
+  {
+    return out << static_cast<std::underlying_type_t<ColoutIndex>>(i);
+  }
+
   struct VisitorResult
   {
     bool isFound;
-    int nextId;
+    ColoutIndex nextId;
     std::size_t countConsumed;
   };
 
   struct BranchCtx
   {
-    int nextIdOk;
-    int nextIdFail;
+    ColoutIndex nextIdOk;
+    ColoutIndex nextIdFail;
 
-    int computeNextId(bool ok) const noexcept
+    ColoutIndex computeNextId(bool ok) const noexcept
     {
       return ok ? nextIdOk : nextIdFail;
     }
@@ -92,7 +103,7 @@ namespace colout
   class Scanner;
 
   VisitorResult run_at(
-    Scanner& scanner, int id, std::string& ctx, string_view sv
+    Scanner& scanner, ColoutIndex id, std::string& ctx, string_view sv
   );
 
   struct ColorApplicator
@@ -101,8 +112,8 @@ namespace colout
     : mColorOrId(in_place_type_t<std::string>{}, color.str_move())
     {}
 
-    ColorApplicator(int id)
-    : mColorOrId(in_place_type_t<int>{}, id)
+    ColorApplicator(ColoutIndex id)
+    : mColorOrId(in_place_type_t<ColoutIndex>{}, id)
     {}
 
     bool apply(Scanner& scanner, std::string& ctx, string_view sv)
@@ -121,13 +132,13 @@ namespace colout
         }
 
         bool operator()(
-          int id,
+          ColoutIndex id,
           Scanner& scanner, std::string& ctx, string_view sv)
         {
           std::size_t pos = 0;
 
           auto res = run_at(scanner, id, ctx, sv);
-          while (res.nextId != -1)
+          while (res.nextId != invalidIndex)
           {
             pos += res.countConsumed;
             res = run_at(scanner, res.nextId, ctx, sv.substr(pos));
@@ -139,7 +150,7 @@ namespace colout
     }
 
   private:
-    mpark::variant<std::string, int> mColorOrId;
+    mpark::variant<std::string, ColoutIndex> mColorOrId;
   };
 
   struct ColorSelector
@@ -281,7 +292,7 @@ namespace colout
       auto res = mPattern.run(scanner, ctx, sv);
       if (res.isFound)
       {
-        int const nextId = res.nextId;
+        ColoutIndex const nextId = res.nextId;
         do {
           pos += res.countConsumed;
           res = mPattern.run(scanner, ctx, sv.substr(pos));
@@ -312,7 +323,7 @@ namespace colout
       std::size_t const ctx_sz_saved = ctx.size();
 
       auto res = mPattern.run(scanner, ctx, sv);
-      while (res.nextId != -1)
+      while (res.nextId != invalidIndex)
       {
         pos += res.countConsumed;
         res = run_at(scanner, res.nextId, ctx, sv.substr(pos));
@@ -337,7 +348,7 @@ namespace colout
 
   struct Jump
   {
-    Jump(int i)
+    Jump(ColoutIndex i)
     : mI(i)
     {}
 
@@ -347,12 +358,12 @@ namespace colout
     }
 
   private:
-    int mI;
+    ColoutIndex mI;
   };
 
   struct Call
   {
-    Call(BranchCtx bctx, int i)
+    Call(BranchCtx bctx, ColoutIndex i)
     : mI(i)
     , mBCtx(bctx)
     {}
@@ -365,13 +376,13 @@ namespace colout
     }
 
   private:
-    int mI;
+    ColoutIndex mI;
     BranchCtx mBCtx;
   };
 
   struct TestPattern
   {
-    TestPattern(int i, std::regex reg)
+    TestPattern(ColoutIndex i, std::regex reg)
     : mReg(std::move(reg))
     , mI(i)
     {}
@@ -379,17 +390,17 @@ namespace colout
     VisitorResult run(Scanner&, std::string&, string_view sv)
     {
       bool const exists = std::regex_search(sv.begin(), sv.end(), mReg);
-      return {exists, exists ? mI : -1, 0};
+      return {exists, exists ? mI : invalidIndex, 0};
     }
 
   private:
     std::regex mReg;
-    int mI;
+    ColoutIndex mI;
   };
 
   struct TestPatternAndCall
   {
-    TestPatternAndCall(BranchCtx bctx, int i, std::regex reg)
+    TestPatternAndCall(BranchCtx bctx, ColoutIndex i, std::regex reg)
     : mReg(std::move(reg))
     , mI(i)
     , mBCtx(bctx)
@@ -408,7 +419,7 @@ namespace colout
 
   private:
     std::regex mReg;
-    int mI;
+    ColoutIndex mI;
     BranchCtx mBCtx;
   };
 
@@ -437,11 +448,11 @@ namespace colout
     limited_array<Element> elems;
   };
 
-  VisitorResult run_at(Scanner& scanner, int id, std::string& ctx, string_view sv)
+  VisitorResult run_at(Scanner& scanner, ColoutIndex id, std::string& ctx, string_view sv)
   {
-    assert(id != -1);
+    assert(id != invalidIndex);
     TRACE("run_at: ", id, " ", sv);
-    return visit(scanner.elems[id], [&](auto & p){
+    return visit(scanner.elems[static_cast<std::size_t>(id)], [&](auto & p){
       return p.run(scanner, ctx, sv);
     });
   }
@@ -515,8 +526,8 @@ namespace colout
     for (int const i : range(0, int(params.size())))
     {
       BranchCtx bctx{
-        get_next_ok(params, i),
-        get_next_fail(params, i)
+        ColoutIndex(get_next_ok(params, i)),
+        ColoutIndex(get_next_fail(params, i))
       };
       ColoutParamCRef param = params[i];
 
@@ -540,7 +551,11 @@ namespace colout
         if (bool(F::next_is_sub & param.activated_flags))
         {
           mk_maybe_loop(in_place_type_t<Group<TestPattern>>{}, [&](auto t){
-            elems.emplace_back(t, bctx, int(elems.size() + 1u), std::move(reg));
+            elems.emplace_back(
+              t, bctx,
+              ColoutIndex(elems.size() + 1u),
+              std::move(reg)
+            );
           });
         }
         else if (param.go_id != -1)
@@ -548,13 +563,21 @@ namespace colout
           if (bool(F::call_label | param.activated_flags))
           {
             mk_maybe_loop(in_place_type_t<TestPatternAndCall>{}, [&](auto t){
-              elems.emplace_back(t, bctx, param.go_id, std::move(reg));
+              elems.emplace_back(
+                t, bctx,
+                ColoutIndex(param.go_id),
+                std::move(reg)
+              );
             });
           }
           else
           {
             mk_maybe_loop(in_place_type_t<TestPattern>{}, [&](auto t){
-              elems.emplace_back(t, param.go_id, std::move(reg));
+              elems.emplace_back(
+                t,
+                ColoutIndex(param.go_id),
+                std::move(reg)
+              );
             });
           }
         }
@@ -568,7 +591,7 @@ namespace colout
             if (color.id_label != -1)
             {
               TRACE("color.label: ", color.id_label);
-              colors.emplace_back(color.id_label);
+              colors.emplace_back(ColoutIndex(color.id_label));
             }
             else
             {
@@ -594,7 +617,7 @@ namespace colout
       else if (bool(F::start_group & param.activated_flags))
       {
         mk_maybe_loop(in_place_type_t<Group<Jump>>{}, [&](auto t){
-          elems.emplace_back(t, bctx, int(elems.size() + 1u));
+          elems.emplace_back(t, bctx, ColoutIndex(elems.size() + 1u));
         });
       }
       else if (param.go_id != -1)
@@ -602,13 +625,13 @@ namespace colout
         if (bool(F::call_label | param.activated_flags))
         {
           mk_maybe_loop(in_place_type_t<Call>{}, [&](auto t){
-            elems.emplace_back(t, bctx, param.go_id);
+            elems.emplace_back(t, bctx, ColoutIndex(param.go_id));
           });
         }
         else
         {
           mk_maybe_loop(in_place_type_t<Jump>{}, [&](auto t){
-            elems.emplace_back(t, param.go_id);
+            elems.emplace_back(t, ColoutIndex(param.go_id));
           });
         }
       }
@@ -647,14 +670,14 @@ int main(int ac, char ** av)
   std::string ctx;
   while (std::getline(std::cin, s))
   {
-    int i = 0;
+    colout::ColoutIndex i = colout::zeroAsIndex;
     colout::string_view sv{s.data(), s.size()};
     do
     {
       auto ret = colout::run_at(scanner, i, ctx, sv);
       sv.remove_prefix(ret.countConsumed);
       i = ret.nextId;
-    } while (i != -1);
+    } while (i != colout::invalidIndex);
 
     std::cout << ctx;
     std::cout.write(sv.data(), sv.size()) << '\n';
