@@ -33,6 +33,7 @@ SOFTWARE.
 
 #include "colout/utils/enum_ops.hpp"
 #include "colout/utils/zstring.hpp"
+#include "colout/cli/parse_colors.hpp"
 
 #include <vector>
 #include <regex>
@@ -132,30 +133,6 @@ namespace cli
   };
 
   struct Units {};
-
-  struct ColorParam
-  {
-    enum Category {
-      theme_category = -3,
-      label_category = -2,
-      color_category = -1,
-    };
-    Color color; // variant<Color, int>
-    int id_label = color_category;
-
-    ColorParam(std::string label, Category category) noexcept
-    : color{std::move(label)}
-    , id_label(category)
-    {}
-
-    ColorParam(Color color) noexcept
-    : color(std::move(color))
-    {}
-
-    bool is_theme_category() const { return id_label == theme_category; }
-    bool is_label_category() const { return id_label == label_category; }
-    bool is_color_category() const { return id_label == color_category; }
-  };
 
   struct GlobalParam
   {

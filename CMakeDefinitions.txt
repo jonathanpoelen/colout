@@ -10,7 +10,8 @@ if (NOT "${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
     add_definitions(
       -Weverything
       -Wno-documentation-unknown-command
-      #-Wno-range-loop-analysis
+      -Wno-range-loop-analysis
+      -Wno-undefined-func-template # TODO
       -Wno-disabled-macro-expansion
       -Wno-c++98-compat
       -Wno-c++98-compat-pedantic

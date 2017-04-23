@@ -31,37 +31,64 @@ SOFTWARE.
 
 #include <vector>
 #include <cstring>
+
+#include <mpark/variant.hpp>
+
+#include "colout/color.hpp"
+
 #include "colout/utils/string_view.hpp"
+
 
 namespace colout
 {
-  class Palettes;
-  class ColorParam;
-  class ColorBuilder;
 
-  namespace cli
+class Palettes;
+class ColorBuilder;
+
+namespace cli
+{
+
+  struct ColorParam
   {
-    void parse_hex_color(
-      ColorBuilder & builder,
-      string_view color
-    );
+    enum class LabelId : int {};
+    struct ThemeName { string_view name; };
+    struct LabelName { string_view name; };
 
-    void parse_int_color(
-      ColorBuilder & builder,
-      string_view color
-    );
+    mpark::variant<
+      Color,
+      LabelId,
+      ThemeName,
+      LabelName,
+      std::vector<Color>
+    > color;
 
-    void parse_color(
-      ColorBuilder & builder,
-      string_view color
-    );
+    enum Mode {
+      no_mode,
+      hash,
+      cycle,
+      scale,
+      random,
+    } mode;
 
-    void parse_colors(
-      ColorBuilder & builder,
-      std::vector<ColorParam> & colors,
-      string_view rng,
-      Palettes const & palettes,
-      char delimiter
-    );
-  }
+    template<class T>
+    ColorParam(T && x, Mode m)
+    : color(std::forward<T>(x))
+    , mode(m)
+    {}
+  };
+
+  void parse_color(
+    ColorBuilder & builder,
+    string_view sv_color,
+    Plan default_plan
+  );
+
+  void parse_colors(
+    ColorBuilder & builder,
+    std::vector<ColorParam> & colors,
+    string_view rng,
+    Palettes const & palettes
+  );
+
+}
 }

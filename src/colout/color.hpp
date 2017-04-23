@@ -161,6 +161,23 @@ namespace colout
       save_plan_ = plan_;
     }
 
+    struct SavedCtx
+    {
+      std::size_t pos;
+      Plan plan;
+    };
+
+    SavedCtx get_saved_ctx() const
+    {
+      return {save_pos_, save_plan_};
+    }
+
+    void set_saved_ctx(SavedCtx ctx)
+    {
+      save_pos_ = ctx.pos;
+      save_plan_ = ctx.plan;
+    }
+
     void reset()
     {
       cmd_.clear();

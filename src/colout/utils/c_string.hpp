@@ -22,29 +22,27 @@ SOFTWARE.
 */
 
 /**
-* \author    Jonathan Poelen <jonathan.poelen+falcon@gmail.com>
+* \author    Jonathan Poelen <jonathan.poelen@gmail.com>
 * \version   0.1
 * \brief
 */
 
 #pragma once
 
-#include "colout/color.hpp"
-
 #include "colout/utils/string_view.hpp"
-#include "colout/utils/range.hpp"
 
-
-namespace colout {
-
-using PaletteRef = Range<string_view const *>;
-
-struct Palettes
+namespace colout
 {
-  PaletteRef get(string_view color) const;
-  Range<string_view const *> get_style_names() const;
-  Range<string_view const *> get_color_names() const;
-  Range<string_view const *> get_palette_names() const;
-};
+  struct c_string : string_view
+  {
+    template<std::size_t n>
+    constexpr c_string(char const (&s)[n])
+    : string_view(s, n-1)
+    {}
 
+    constexpr string_view to_sv() const noexcept
+    {
+      return *this;
+    }
+  };
 }

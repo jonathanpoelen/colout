@@ -71,7 +71,7 @@ namespace colout
   using mpark::in_place_type_t;
   using mpark::in_place_type;
 
-  enum class ColoutIndex : int;
+  enum class ColoutIndex : int {};
   constexpr ColoutIndex invalidIndex = ColoutIndex(-1);
   constexpr ColoutIndex zeroAsIndex = ColoutIndex(-1);
 

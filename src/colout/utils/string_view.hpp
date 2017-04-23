@@ -33,6 +33,7 @@ SOFTWARE.
 #include <cstdint>
 #include <cstring> // strlen
 #include <cassert>
+#include <algorithm>
 
 
 namespace colout
@@ -69,19 +70,36 @@ namespace colout
     constexpr string_view
     substr(std::size_t pos) const
     {
-      assert(pos <= n_);
+      assert(pos <= size());
       return string_view{s_ + pos, s_ + n_};
     }
 
     constexpr string_view
     substr(std::size_t pos, std::size_t count) const
     {
-      assert(pos <= n_);
-      assert(pos + count <= n_);
+      assert(pos <= size());
+      assert(pos + count <= size());
       return string_view{s_ + pos, s_ + pos + count};
     }
 
-    constexpr char operator[](std::size_t i) const noexcept { return s_[i]; }
+    constexpr char operator[](std::size_t i) const noexcept
+    {
+      assert(i < size());
+      return s_[i];
+    }
+
+    constexpr char front() const noexcept
+    {
+      assert(size());
+      return *begin();
+    }
+
+    constexpr char back() const noexcept
+    {
+      assert(size());
+      return *(end()-1);
+    }
+
     constexpr std::size_t size() const noexcept { return n_; }
     constexpr bool empty() const noexcept { return !n_; }
     constexpr char const * data() const noexcept { return s_; }
@@ -114,7 +132,24 @@ namespace colout
     return os.write(sv.data(), sv.size());
   }
 
+
+  inline bool operator == (string_view const & a, string_view const & b)
+  {
+    if (a.size() != b.size()) {
+      return false;
+    }
+    return std::equal(a.begin(), a.end(), b.begin());
+  }
+
+  inline bool operator != (string_view const & a, string_view const & b)
+  {
+    return !(a == b);
+  }
+
+
+#ifndef IN_IDE_PARSER
   inline constexpr string_view operator
   "" _sv(char const * s, std::size_t n)
   { return {s, n}; }
+#endif
 }
