@@ -30,6 +30,7 @@ SOFTWARE.
 #include "colout/cli/parse_cli.hpp"
 #include "colout/utils/limited_array.hpp"
 #include "colout/utils/range.hpp"
+#include "colout/utils/overload.hpp"
 
 #include <falcon/cxx/cxx.hpp>
 
@@ -73,7 +74,7 @@ namespace colout
 
   enum class ColoutIndex : int {};
   constexpr ColoutIndex invalidIndex = ColoutIndex(-1);
-  constexpr ColoutIndex zeroAsIndex = ColoutIndex(-1);
+  constexpr ColoutIndex zeroAsIndex = ColoutIndex(0);
 
   template<class Ch, class Tr>
   std::basic_ostream<Ch, Tr>&
@@ -227,7 +228,8 @@ namespace colout
 
         if (!mReg.mark_count())
         {
-          if (!apply_color(0)) {
+          if (!apply_color(0))
+          {
             return {false, mBCtx.nextIdFail, 0};
           }
         }
@@ -235,7 +237,8 @@ namespace colout
         {
           for (size_t i : range(1u, mMatch.size()))
           {
-            if (!apply_color(i)) {
+            if (!apply_color(i))
+            {
               return {false, mBCtx.nextIdFail, 0};
             }
           }
@@ -278,24 +281,32 @@ namespace colout
     BranchCtx mBCtx;
   };
 
-  template<class Pattern>
+  #ifdef IN_IDE_PARSER
+  struct Impl
+  {
+    VisitorResult run(Scanner& scanner, std::string& ctx, string_view sv);
+  };
+  #endif
+
+  template<class Impl>
   struct Loop
   {
     template<class... Args>
     Loop(Args&&... args)
-    : mPattern(std::forward<Args>(args)...)
+    : mImpl(std::forward<Args>(args)...)
     {}
 
     VisitorResult run(Scanner& scanner, std::string& ctx, string_view sv)
     {
       std::size_t pos = 0;
-      auto res = mPattern.run(scanner, ctx, sv);
+      auto res = mImpl.run(scanner, ctx, sv);
       if (res.isFound)
       {
         ColoutIndex const nextId = res.nextId;
-        do {
+        do
+        {
           pos += res.countConsumed;
-          res = mPattern.run(scanner, ctx, sv.substr(pos));
+          res = mImpl.run(scanner, ctx, sv.substr(pos));
         } while (res.isFound);
         res.isFound = true;
         res.countConsumed = pos;
@@ -305,15 +316,15 @@ namespace colout
     }
 
   private:
-    Pattern mPattern;
+    Impl mImpl;
   };
 
-  template<class Pattern>
+  template<class Impl>
   struct Group
   {
     template<class... Args>
     Group(BranchCtx bctx, Args&&... args)
-    : mPattern(std::forward<Args&&>(args)...)
+    : mImpl(std::forward<Args&&>(args)...)
     , mBCtx(bctx)
     {}
 
@@ -322,7 +333,7 @@ namespace colout
       std::size_t pos = 0;
       std::size_t const ctx_sz_saved = ctx.size();
 
-      auto res = mPattern.run(scanner, ctx, sv);
+      auto res = mImpl.run(scanner, ctx, sv);
       while (res.nextId != invalidIndex)
       {
         pos += res.countConsumed;
@@ -342,7 +353,7 @@ namespace colout
     }
 
   private:
-    Pattern mPattern;
+    Impl mImpl;
     BranchCtx mBCtx;
   };
 
@@ -531,7 +542,7 @@ namespace colout
       };
       ColoutParamCRef param = params[i];
 
-      std::cerr << i << " -> " << bctx.nextIdOk << "  " << bctx.nextIdFail << "\n";
+      TRACE(i, " -> ", bctx.nextIdOk, "  ", bctx.nextIdFail     );
 
       auto mk_maybe_loop = [&](auto t, auto mk){
         if (bool(F::loop_regex & param.activated_flags))
@@ -584,20 +595,29 @@ namespace colout
         else
         {
           limited_array<ColorApplicator> colors(param.colors.size());
-          TRACE("color.sz: ", param.colors.size());
+          TRACE("color_param.sz: ", param.colors.size());
           assert(param.colors.size());
-          for (cli::ColorParam const & color :  param.colors)
+          for (cli::ColorParam const & color_param :  param.colors)
           {
-            if (color.id_label != -1)
-            {
-              TRACE("color.label: ", color.id_label);
-              colors.emplace_back(ColoutIndex(color.id_label));
-            }
-            else
-            {
-              TRACE("color.color: ", color.color);
-              colors.emplace_back(color.color);
-            }
+            mpark::visit(overload(
+              [&](cli::ColorParam::LabelId id){
+                TRACE("color_param.label: ", int(id));
+                colors.emplace_back(ColoutIndex(int(id)));
+              },
+              [&](Color const & color){
+                TRACE("color_param.color: ", color);
+                colors.emplace_back(color);
+              },
+              [&](std::vector<Color> const & /*colors*/){
+                // TODO
+              },
+              [](cli::ColorParam::ThemeName){
+                assert(false);
+              },
+              [](cli::ColorParam::LabelName){
+                assert(false);
+              }
+            ), color_param.color);
           }
 
           mk_maybe_loop(in_place_type_t<Pattern>{}, [&](auto t){
@@ -616,12 +636,14 @@ namespace colout
       }
       else if (bool(F::start_group & param.activated_flags))
       {
+        TRACE(" -> ", elems.size() + 1u);
         mk_maybe_loop(in_place_type_t<Group<Jump>>{}, [&](auto t){
           elems.emplace_back(t, bctx, ColoutIndex(elems.size() + 1u));
         });
       }
       else if (param.go_id != -1)
       {
+        TRACE(" -> ", param.go_id);
         if (bool(F::call_label | param.activated_flags))
         {
           mk_maybe_loop(in_place_type_t<Call>{}, [&](auto t){

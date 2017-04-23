@@ -30,6 +30,7 @@ SOFTWARE.
 #pragma once
 
 #include <iosfwd>
+#include <string>
 #include <cstdint>
 #include <cstring> // strlen
 #include <cassert>
@@ -118,6 +119,11 @@ namespace colout
     {
       assert(n <= n_);
       n_ -= n;
+    }
+
+    operator std::string () const
+    {
+      return {begin(), end()};
     }
 
   private:

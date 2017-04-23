@@ -31,6 +31,7 @@ SOFTWARE.
 #include "colout/cli/parse_cli.hpp"
 #include "colout/cli/parse_colors.hpp"
 #include "colout/utils/range.hpp"
+#include "colout/utils/overload.hpp"
 
 #include <falcon/cxx/cxx.hpp>
 
@@ -204,7 +205,7 @@ inline int parse_cli(
       }
       else {
         ColorBuilder builder;
-        parse_color(builder, {s, strlen(s)});
+        parse_color(builder, {s, strlen(s)}, Plan::fg);
         coloutParam.esc = builder.get_color_and_clear().str_move();
       }
     }),
@@ -571,9 +572,9 @@ public:
     Labels labels{coloutParams};
     auto first = begin(coloutParams);
     auto last = end(coloutParams);
-    auto load_theme = [&](std::string && theme_name){
+    auto load_theme = [&](std::string theme_name){
         auto const param_sz = coloutParams.size();
-        // /!\ may invalidate first and last iterators
+        // /!\ can invalidate first and last iterators
         auto const id = themes.get_id_or_load(std::move(theme_name));
         if (param_sz < coloutParams.size()) {
           labels = Labels{coloutParams}; // PERF
@@ -593,16 +594,21 @@ public:
         if (param.go_label.size()) {
           param.go_id = labels.find(param.go_label);
         }
-        // /!\ iterators may be invalidate by load_theme
+        // /!\ iterators may be invalidated by load_theme
         for (auto i : range(0u, param.colors.size())) {
-          ColorParam & c = first->colors[i];
-          if (c.is_label_category()) {
-            c.id_label = labels.find(c.color.str());
-          }
-          else if (c.is_theme_category()) {
-            auto id = load_theme(c.color.str_move());
-            first->colors[i].id_label = id;
-          }
+          ColorParam & color_param = first->colors[i];
+          mpark::visit(overload(
+            [](ColorParam::LabelId){ assert(false); },
+            [](std::vector<Color> const & /*colors*/){},
+            [](Color const & /*color*/){},
+            [&](ColorParam::ThemeName const & theme){
+              auto id = load_theme(theme.name);
+              first->colors[i].color = ColorParam::LabelId(id);
+            },
+            [&](ColorParam::LabelName const & label){
+              color_param.color = ColorParam::LabelId(labels.find(label.name));
+            }
+          ), color_param.color);
         }
       }
     }
@@ -732,6 +738,7 @@ int Themes::get_id_or_load(std::string name)
 
   int ret = int(ast_.coloutParams.size());
   colout_parse_cli_impl(ast_, {int(v.size()), v.data()});
+  themes_.emplace_back(std::move(name), ret);
   return ret;
 }
 
@@ -851,8 +858,7 @@ void colout_parse_cli_impl(ColoutParamAst & ast, Args args)
         ast.colorBuilder,
         coloutParam.colors,
         s,
-        ast.palettes,
-        globalParam.delim_style
+        ast.palettes
       );
     }
   }

@@ -49,11 +49,7 @@ add_library(parse_colors ${SRC_PARSE_COLOR})
 target_link_libraries(parse_colors_test parse_colors)
 
 
-add_executable(
-  colout
-  colout.cpp
-  src/colout/cli/parse_cli.cpp
-)
+add_executable(colout colout.cpp src/colout/cli/parse_cli.cpp)
 target_link_libraries(colout parse_colors)
 
 # enable_testing()
