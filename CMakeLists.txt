@@ -19,7 +19,7 @@ endif()
 
 include_directories(src/)
 include_directories(modules/falcon.cxx/include/)
-include_directories(modules/variant/include)
+include_directories(SYSTEM modules/variant/include)
 
 set(SRC src/colout/)
 
@@ -33,7 +33,7 @@ target_compile_definitions(boost_unit_tests PRIVATE -DBOOST_TEST_DYN_LINK)
 # Tests
 function(add_executable_test name)
   add_executable(${name}_test test/${name}_test.cpp)
-  add_test(all_tests ${name}_test)
+  add_test(${name}_unit_test ${name}_test)
   target_link_libraries(${name}_test boost_unit_tests)
   target_compile_definitions(
     ${name}_test
@@ -42,11 +42,14 @@ function(add_executable_test name)
 endfunction()
 
 add_executable_test(parse_colors)
+add_executable_test(color)
+add_executable_test(palette)
 remove_definitions(-frtti)
 
 set(SRC_PARSE_COLOR ${SRC}/cli/parse_colors.cpp ${SRC}/palette.cpp)
 add_library(parse_colors ${SRC_PARSE_COLOR})
 target_link_libraries(parse_colors_test parse_colors)
+target_link_libraries(palette_test parse_colors)
 
 
 add_executable(colout colout.cpp src/colout/cli/parse_cli.cpp)

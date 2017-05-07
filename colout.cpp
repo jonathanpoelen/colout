@@ -1,6 +1,6 @@
 /* The MIT License (MIT)
 
-Copyright (c) 2016 jonathan poelen
+Copyright (c) 2017 jonathan poelen
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -109,33 +109,15 @@ namespace colout
 
   struct ColorApplicator
   {
-    ColorApplicator(Color color)
-    : mColorOrId(in_place_type_t<std::string>{}, color.str_move())
-    {}
-
-    ColorApplicator(ColoutIndex id)
-    : mColorOrId(in_place_type_t<ColoutIndex>{}, id)
+    template<class T>
+    ColorApplicator(T color)
+    : mColorOrId(in_place_type_t<T>{}, std::move(color))
     {}
 
     bool apply(Scanner& scanner, std::string& ctx, string_view sv)
     {
-      struct Fns
-      {
-        bool operator()(
-          std::string const& s,
-          Scanner&, std::string& ctx, string_view sv)
-        {
-          ctx
-            .append(begin(s), end(s))
-            .append(begin(sv), end(sv))
-          ;
-          return true;
-        }
-
-        bool operator()(
-          ColoutIndex id,
-          Scanner& scanner, std::string& ctx, string_view sv)
-        {
+      return visit(mColorOrId, overload(
+        [&](ColoutIndex id){
           std::size_t pos = 0;
 
           auto res = run_at(scanner, id, ctx, sv);
@@ -145,13 +127,27 @@ namespace colout
             res = run_at(scanner, res.nextId, ctx, sv.substr(pos));
           }
           return res.isFound;
+        },
+        [&](Color const& color){
+          ctx
+            .append(begin(color.str()), end(color.str()))
+            .append(begin(sv), end(sv))
+          ;
+          return true;
+        },
+        [&](std::vector<Color> const& colors){
+          // TODO cycle
+          ctx
+            .append(begin(colors[0].str()), end(colors[0].str()))
+            .append(begin(sv), end(sv))
+          ;
+          return true;
         }
-      };
-      return visit(mColorOrId, Fns{}, scanner, ctx, sv);
+      ));
     }
 
   private:
-    mpark::variant<std::string, ColoutIndex> mColorOrId;
+    mpark::variant<Color, ColoutIndex, std::vector<Color>> mColorOrId;
   };
 
   struct ColorSelector
@@ -470,6 +466,7 @@ namespace colout
 
 
   using ColoutParamCRef = cli::ColoutParam const&;
+  using ColoutParamRef = cli::ColoutParam&;
 
   inline int next_id(int id, ColoutParamCRef param)
   {
@@ -540,7 +537,7 @@ namespace colout
         ColoutIndex(get_next_ok(params, i)),
         ColoutIndex(get_next_fail(params, i))
       };
-      ColoutParamCRef param = params[i];
+      ColoutParamRef param = params[i];
 
       TRACE(i, " -> ", bctx.nextIdOk, "  ", bctx.nextIdFail     );
 
@@ -594,22 +591,25 @@ namespace colout
         }
         else
         {
-          limited_array<ColorApplicator> colors(param.colors.size());
+          limited_array<ColorApplicator> color_applicators(param.colors.size());
           TRACE("color_param.sz: ", param.colors.size());
           assert(param.colors.size());
-          for (cli::ColorParam const & color_param :  param.colors)
+          for (cli::ColorParam & color_param :  param.colors)
           {
-            mpark::visit(overload(
+            visit(color_param.color, overload(
               [&](cli::ColorParam::LabelId id){
                 TRACE("color_param.label: ", int(id));
-                colors.emplace_back(ColoutIndex(int(id)));
+                // TODO color mode
+                color_applicators.emplace_back(ColoutIndex(int(id)));
               },
-              [&](Color const & color){
+              [&](Color & color){
                 TRACE("color_param.color: ", color);
-                colors.emplace_back(color);
+                color_applicators.emplace_back(std::move(color));
               },
-              [&](std::vector<Color> const & /*colors*/){
-                // TODO
+              [&](std::vector<Color> & colors){
+                TRACE("color_param.colors: count=", colors.size());
+                // TODO color mode
+                color_applicators.emplace_back(std::move(colors));
               },
               [](cli::ColorParam::ThemeName){
                 assert(false);
@@ -617,7 +617,7 @@ namespace colout
               [](cli::ColorParam::LabelName){
                 assert(false);
               }
-            ), color_param.color);
+            ));
           }
 
           mk_maybe_loop(in_place_type_t<Pattern>{}, [&](auto t){
@@ -625,7 +625,7 @@ namespace colout
               t,
               bctx,
               std::move(reg),
-              std::move(colors),
+              std::move(color_applicators),
               bool(F::set_reset_color & param.activated_flags)
                 ? std::move(param.esc)
                 : esc_reset.data(),

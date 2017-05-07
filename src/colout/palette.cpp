@@ -31,14 +31,38 @@ SOFTWARE.
 #include "colout/utils/c_string.hpp"
 #include "colout/utils/range.hpp"
 
+#include <array>
+#include <utility>
+
+
 namespace
 {
+  template<std::size_t... ints, class... SV>
+  constexpr auto
+  make_reverse_palette_impl(std::index_sequence<ints...>, SV&&... sv)
+  {
+    const colout::string_view a[]{sv...};
+    return std::array<colout::string_view, sizeof...(sv)+1>{{
+      a[sizeof...(sv) - ints - 1]...,
+      colout::c_string{""}
+    }};
+  }
+
+  template<class... CStr>
+  constexpr auto
+  make_reverse_palette(CStr&&... c_str)
+  {
+    return make_reverse_palette_impl(
+      std::index_sequence_for<CStr...>{}, colout::c_string(c_str)...);
+  }
+
   namespace palette_def
   {
     // `, ""` std::end(c_string) to string_view pointer is a error in clang:
     // cannot access base class of pointer past the end of object
-    #define MK_PALETTE(name, ...) \
-      constexpr colout::c_string name##_[] {__VA_ARGS__, ""};
+    #define MK_PALETTE(name, ...)                             \
+      constexpr colout::c_string name##_[] {__VA_ARGS__, ""}; \
+      constexpr auto reverse_##name##_ = make_reverse_palette(__VA_ARGS__);
     # include "./decl_palette.hpp"
     #undef MK_PALETTE
   }
@@ -51,9 +75,23 @@ namespace
     return {av, av + n - 1};
   }
 
+  template<std::size_t n>
+  constexpr colout::PaletteRef
+  def_to_ref(std::array<colout::string_view, n> const& av)
+  {
+    // ignore last string (see comment above)
+    return {&av[0], &av[n - 1]};
+  }
+
   struct Palette { colout::c_string name; colout::PaletteRef palette; };
   constexpr Palette palettes[] = {
     #define MK_PALETTE(name, ...) {#name, def_to_ref(palette_def::name##_)},
+    # include "./decl_palette.hpp"
+    #undef MK_PALETTE
+
+    #define MK_PALETTE(name, ...) {\
+      "r:" #name, def_to_ref(palette_def::reverse_##name##_)\
+    },
     # include "./decl_palette.hpp"
     #undef MK_PALETTE
   };

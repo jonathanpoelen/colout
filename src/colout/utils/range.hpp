@@ -57,12 +57,15 @@ namespace colout
     It last_;
 
     using value_type = typename std::iterator_traits<It>::value_type;
-    using reference = value_type &;
+    using reference = typename std::iterator_traits<It>::reference;
     using const_reference = value_type const &;
     using difference_type = typename std::iterator_traits<It>::difference_type;
 
     reference front() { assert(!empty()); return *first_; }
     const_reference front() const { assert(!empty()); return *first_; }
+
+    reference back() { assert(!empty()); return *(last_-1); }
+    const_reference back() const { assert(!empty()); return *(last_-1); }
 
     constexpr value_type const & operator[](std::size_t i) const noexcept { return first_[i]; }
     constexpr difference_type size() const noexcept { return last_ - first_; }
@@ -88,8 +91,6 @@ namespace std
 {
   template<class T>
   struct iterator_traits<colout::IntIterator<T>>
-  {
-    using value_type = T;
-    using difference_type = std::ptrdiff_t;
-  };
+  : iterator_traits<T*>
+  {};
 }

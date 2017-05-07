@@ -92,13 +92,13 @@ namespace colout
     constexpr char front() const noexcept
     {
       assert(size());
-      return *begin();
+      return *s_;
     }
 
     constexpr char back() const noexcept
     {
       assert(size());
-      return *(end()-1);
+      return s_[n_-1];
     }
 
     constexpr std::size_t size() const noexcept { return n_; }
