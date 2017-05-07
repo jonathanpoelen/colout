@@ -38,6 +38,7 @@ SOFTWARE.
 
 #include <iostream>
 #include <iterator>
+#include <memory>
 
 #include <mpark/variant.hpp>
 
@@ -106,6 +107,12 @@ namespace colout
   VisitorResult run_at(
     Scanner& scanner, ColoutIndex id, std::string& ctx, string_view sv
   );
+
+  struct VisitorBase
+  {
+    virtual ~VisitorBase() {}
+    virtual VisitorResult run(Scanner& scanner, std::string& ctx, string_view sv) = 0;
+  };
 
   struct ColorApplicator
   {
@@ -180,7 +187,7 @@ namespace colout
 
   using F = cli::ActiveFlags;
 
-  struct Pattern
+  struct Pattern : VisitorBase
   {
     Pattern(
       BranchCtx bctx,
@@ -199,7 +206,7 @@ namespace colout
     , mBCtx(bctx)
     {}
 
-    VisitorResult run(Scanner& scanner, std::string& ctx, string_view sv)
+    VisitorResult run(Scanner& scanner, std::string& ctx, string_view sv) override
     {
       std::size_t pos = 0;
       std::size_t const ctx_sz_saved = ctx.size();
@@ -277,22 +284,15 @@ namespace colout
     BranchCtx mBCtx;
   };
 
-  #ifdef IN_IDE_PARSER
-  struct Impl
-  {
-    VisitorResult run(Scanner& scanner, std::string& ctx, string_view sv);
-  };
-  #endif
-
   template<class Impl>
-  struct Loop
+  struct Loop : VisitorBase
   {
     template<class... Args>
     Loop(Args&&... args)
     : mImpl(std::forward<Args>(args)...)
     {}
 
-    VisitorResult run(Scanner& scanner, std::string& ctx, string_view sv)
+    VisitorResult run(Scanner& scanner, std::string& ctx, string_view sv) override
     {
       std::size_t pos = 0;
       auto res = mImpl.run(scanner, ctx, sv);
@@ -316,7 +316,7 @@ namespace colout
   };
 
   template<class Impl>
-  struct Group
+  struct Group : VisitorBase
   {
     template<class... Args>
     Group(BranchCtx bctx, Args&&... args)
@@ -324,7 +324,7 @@ namespace colout
     , mBCtx(bctx)
     {}
 
-    VisitorResult run(Scanner& scanner, std::string& ctx, string_view sv)
+    VisitorResult run(Scanner& scanner, std::string& ctx, string_view sv) override
     {
       std::size_t pos = 0;
       std::size_t const ctx_sz_saved = ctx.size();
@@ -353,13 +353,13 @@ namespace colout
     BranchCtx mBCtx;
   };
 
-  struct Jump
+  struct Jump : VisitorBase
   {
     Jump(ColoutIndex i)
     : mI(i)
     {}
 
-    VisitorResult run(Scanner& scanner, std::string& ctx, string_view sv)
+    VisitorResult run(Scanner& scanner, std::string& ctx, string_view sv) override
     {
       return run_at(scanner, mI, ctx, sv);
     }
@@ -368,14 +368,14 @@ namespace colout
     ColoutIndex mI;
   };
 
-  struct Call
+  struct Call : VisitorBase
   {
     Call(BranchCtx bctx, ColoutIndex i)
     : mI(i)
     , mBCtx(bctx)
     {}
 
-    VisitorResult run(Scanner& scanner, std::string& ctx, string_view sv)
+    VisitorResult run(Scanner& scanner, std::string& ctx, string_view sv) override
     {
       auto res = run_at(scanner, mI, ctx, sv);
       res.nextId = mBCtx.computeNextId(res.isFound);
@@ -387,14 +387,14 @@ namespace colout
     BranchCtx mBCtx;
   };
 
-  struct TestPattern
+  struct TestPattern : VisitorBase
   {
     TestPattern(ColoutIndex i, std::regex reg)
     : mReg(std::move(reg))
     , mI(i)
     {}
 
-    VisitorResult run(Scanner&, std::string&, string_view sv)
+    VisitorResult run(Scanner&, std::string&, string_view sv) override
     {
       bool const exists = std::regex_search(sv.begin(), sv.end(), mReg);
       return {exists, exists ? mI : invalidIndex, 0};
@@ -405,7 +405,7 @@ namespace colout
     ColoutIndex mI;
   };
 
-  struct TestPatternAndCall
+  struct TestPatternAndCall : VisitorBase
   {
     TestPatternAndCall(BranchCtx bctx, ColoutIndex i, std::regex reg)
     : mReg(std::move(reg))
@@ -413,7 +413,7 @@ namespace colout
     , mBCtx(bctx)
     {}
 
-    VisitorResult run(Scanner& scanner, std::string& ctx, string_view sv)
+    VisitorResult run(Scanner& scanner, std::string& ctx, string_view sv) override
     {
       bool exists = std::regex_search(sv.begin(), sv.end(), mReg);
       if (exists)
@@ -433,35 +433,31 @@ namespace colout
 
   struct Scanner
   {
-    template<class... Ts>
-    using variant = mpark::variant<Ts..., Loop<Ts>...>;
-
-    struct Element : variant<
-      Pattern,
-      TestPattern,
-      TestPatternAndCall,
-      Group<TestPattern>,
-      Group<Jump>,
-      Jump,
-      Call
-    >
+    struct Element
     {
-      FALCON_DIAGNOSTIC_PUSH
-      FALCON_DIAGNOSTIC_GCC_ONLY_IGNORE("-Wuseless-cast")
-      using variant::variant;
-      FALCON_DIAGNOSTIC_POP
+      template<class T, class... Args>
+      Element(mpark::in_place_type_t<T>, Args&&... args)
+      : p(new T{std::forward<Args>(args)...})
+      {
+      }
+
+      VisitorResult run(Scanner& scanner, std::string& ctx, string_view sv)
+      {
+        return p->run(scanner, ctx, sv);
+      }
+
+    private:
+      std::unique_ptr<VisitorBase> p;
     };
 
-    limited_array<Element> elems;
+    std::vector<Element> elems;
   };
 
   VisitorResult run_at(Scanner& scanner, ColoutIndex id, std::string& ctx, string_view sv)
   {
     assert(id != invalidIndex);
     TRACE("run_at: ", id, " ", sv);
-    return visit(scanner.elems[static_cast<std::size_t>(id)], [&](auto & p){
-      return p.run(scanner, ctx, sv);
-    });
+    return scanner.elems[static_cast<std::size_t>(id)].run(scanner, ctx, sv);
   }
 
 
@@ -529,7 +525,8 @@ namespace colout
 
   inline Scanner make_scanner(std::vector<cli::ColoutParam> params)
   {
-    limited_array<Scanner::Element> elems(params.size());
+    decltype(Scanner::elems) elems;
+    elems.reserve(params.size());
 
     for (int const i : range(0, int(params.size())))
     {
