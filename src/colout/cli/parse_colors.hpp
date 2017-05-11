@@ -50,30 +50,92 @@ namespace cli
 
   struct ColorParam
   {
-    enum class LabelId : int {};
+    struct Modes
+    {
+      struct ColorMode
+      {
+        std::string reset_color;
+        bool is_default_reset_color = true;
+      };
+
+      struct Cycle
+      {
+        ColorMode color_mode;
+        bool is_recursive = false;
+        bool is_looped = true;
+      };
+
+      struct Hash
+      {
+        ColorMode color_mode;
+      };
+
+      struct Random
+      {
+        ColorMode color_mode;
+        uint64_t seed = 0;
+      };
+
+      struct Scale
+      {
+        ColorMode color_mode;
+        string_view units;
+        struct Unit
+        {
+          string_view name;
+          int coeff;
+        };
+        std::vector<Unit> def_units;
+        double scale_min = 0;
+        double scale_max = 100;
+        double unit_coeff = 1000;
+        enum Mode { Uni, Log, Exp, Div } mode = Uni;
+        Color overflow_color;
+        Color underflow_color;
+      };
+    };
+
+    // only with ColorVariant = std::vector<Color>. LabelName or ThemeName
+    using ModeVariant = mpark::variant<
+      mpark::monostate,
+      Modes::Cycle,
+      Modes::Hash,
+      Modes::Random,
+      Modes::Scale
+    >;
+
     struct ThemeName { string_view name; };
-    struct LabelName { string_view name; };
 
-    mpark::variant<
+    enum class LabelId : int {};
+
+    struct LabelName
+    {
+      enum class Type { Label, Reference, Optional };
+      string_view name;
+      Type type;
+      ModeVariant mode;
+    };
+
+    struct Colors
+    {
+      std::vector<Color> colors;
+      ModeVariant mode;
+    };
+
+    using ColorVariant = mpark::variant<
       Color,
+      Colors,
       LabelId,
-      ThemeName,
+      // Intermediate values
       LabelName,
-      std::vector<Color>
-    > color;
+      ThemeName
+    >;
 
-    enum Mode {
-      no_mode,
-      hash,
-      cycle,
-      scale,
-      random,
-    } mode;
+    ColorVariant color;
 
     template<class T>
-    ColorParam(T && x, Mode m)
+    ColorParam(T&& x)
     : color(std::forward<T>(x))
-    , mode(m)
     {}
   };
 

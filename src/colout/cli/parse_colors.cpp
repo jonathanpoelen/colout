@@ -36,6 +36,7 @@ SOFTWARE.
 #include "colout/cli/parse_colors.hpp"
 #include "colout/utils/c_string.hpp"
 #include "colout/utils/get_lines.hpp"
+#include "colout/utils/overload.hpp"
 
 #include <cstring>
 
@@ -373,26 +374,95 @@ bool parse_single_color(
   return true;
 }
 
-// [hrc]:
-ColorParam::Mode parse_color_mode_and_advance(string_view & sv_color)
+bool parse_color_mode_value_and_advance(
+  ColorParam::Modes::Cycle & cycle,
+  string_view & sv_color
+){
+  return false;
+}
+
+bool parse_color_mode_value_and_advance(
+  ColorParam::Modes::Hash & hash,
+  string_view & sv_color
+){
+  return false;
+}
+
+bool parse_color_mode_value_and_advance(
+  ColorParam::Modes::Random & random,
+  string_view & sv_color
+){
+  return false;
+}
+
+bool parse_color_mode_value_and_advance(
+  ColorParam::Modes::Scale & scale,
+  string_view & sv_color
+){
+  return false;
+}
+
+template<class T>
+struct t_ { using type = T; };
+
+/*
+ * I = integer
+ * F = floating point | I
+ * OptColor = [-r,--no-reset-color] [-K,--normal-color color]
+ * Mode(c, opts?) = c':'[color] | c'~' OptColor opts '~'[:][color]
+ *
+ * cycle  = Mode('c', [-c,--recursive] [-n,--no-loop])
+ * hash   = Mode('h')
+ * random = Mode('a', [-s,--seed I])
+ * scale  = Mode('s',
+ *    [-U,--units units]
+ *    [-m,--mode {uni|log|div|exp}]
+ *    [-o,--overflow-color color]
+ *    [-u,--underflow-color color]
+ *    [-c,--coeff] F]
+ *    [-C,--color-all]
+ *    [[-s,--scale] {F|F-F}]
+ * )
+ */
+// [hcsa]:
+ColorParam::ModeVariant parse_color_mode_and_advance(string_view & sv_color)
 {
-  ColorParam::Mode color_mode = ColorParam::no_mode;
-  if (sv_color.size() > 2 && sv_color[1] == ':') {
-    switch (sv_color.front()) {
-      case 'h': color_mode = ColorParam::hash; break;
-      case 'c': color_mode = ColorParam::cycle; break;
-      case 's': color_mode = ColorParam::scale; break;
-      case 'a': color_mode = ColorParam::random; break;
-      case 'r': break; // reversed palette
-      default: throw runtime_cli_error(
-        std::string("unknown '") + sv_color.front() + "' color mode"
-      );
+  ColorParam::ModeVariant mode;
+  auto const tmp_sv_color = sv_color;
+
+  auto parse_value = [&](auto t){
+    sv_color.remove_prefix(1);
+
+    if (sv_color.empty()) {
+      sv_color = tmp_sv_color;
     }
-    if (bool(color_mode)) {
-      sv_color.remove_prefix(2);
+    else {
+      switch (sv_color.front()) {
+        case ':':
+        case '(':
+          using T = typename decltype(t)::type;
+          mode.emplace<T>();
+          sv_color.remove_prefix(1);
+          if (not sv_color.empty()) {
+            parse_color_mode_value_and_advance(mpark::get<T>(mode), sv_color);
+          }
+          break;
+        default:
+          sv_color = tmp_sv_color;
+          break;
+      }
     }
+  };
+
+  switch (sv_color.front()) {
+    case 'c': parse_value(t_<ColorParam::Modes::Cycle>{}); break;
+    case 'h': parse_value(t_<ColorParam::Modes::Hash>{}); break;
+    case 'a': parse_value(t_<ColorParam::Modes::Random>{}); break;
+    case 's': parse_value(t_<ColorParam::Modes::Scale>{}); break;
+    default: break;
   }
-  return color_mode;
+
+  return mode;
 }
 
 // fg= or bg=
@@ -452,19 +522,38 @@ GroupType parse_pack_color(
   std::vector<ColorParam> & color_params,
   string_view const sv_color,
   Palettes const & palettes,
-  ColorParam::Mode const color_mode,
-  Plan const plan
+  Plan const plan,
+  ColorParam::ModeVariant && mode
 ){
   PaletteRef palette = palettes.get(sv_color);
   if (palette.empty()) {
-    if (':' == sv_color[0]) {
-      color_params.emplace_back(ColorParam::LabelName{sv_color.substr(1)}, color_mode);
-    }
-    else {
-      if (color_mode != ColorParam::no_mode) {
+    using LabelName = ColorParam::LabelName;
+    using Type = ColorParam::LabelName::Type;
+    switch (sv_color[0]) {
+    // label
+    case ':' :
+      color_params.emplace_back(LabelName{
+        sv_color.substr(1), Type::Label, std::move(mode)});
+      break;
+    // optional label
+    case '?' :
+      color_params.emplace_back(LabelName{
+        sv_color.substr(1), Type::Optional, std::move(mode)});
+      break;
+    // reference
+    case '%' :
+      if (mode.index()) {
+        throw runtime_cli_error("a reference label cannot have a color mode");
+      }
+      color_params.emplace_back(LabelName{
+        sv_color.substr(1), Type::Reference, mpark::monostate{}});
+      break;
+    // theme
+    default:
+      if (mode.index()) {
         throw runtime_cli_error("a theme cannot have a color mode");
       }
-      color_params.emplace_back(ColorParam::ThemeName{sv_color}, color_mode);
+      color_params.emplace_back(ColorParam::ThemeName{sv_color});
     }
     return GroupType::Other;
   }
@@ -472,19 +561,20 @@ GroupType parse_pack_color(
   builder.push_plan(plan);
   builder.save_states();
 
-  if (color_mode == ColorParam::no_mode) {
-    for (string_view const sv : palette) {
-      builder.push_palette(sv);
-      color_params.emplace_back(builder.get_color_and_clear(), color_mode);
-    }
-  }
-  else {
+  if (mode.index()) {
     std::vector<Color> colors;
     for (string_view const sv : palette) {
       builder.push_palette(sv);
       colors.push_back(builder.get_color_and_clear());
     }
-    color_params.emplace_back(std::move(colors), color_mode);
+    color_params.emplace_back(ColorParam::Colors{
+      std::move(colors), std::move(mode)});
+  }
+  else {
+    for (string_view const sv : palette) {
+      builder.push_palette(sv);
+      color_params.emplace_back(builder.get_color_and_clear());
+    }
   }
   return GroupType::Palette;
 }
@@ -512,41 +602,42 @@ void parse_colors(
 ){
   builder.reset();
   while (sv_color_list.size()) {
-    ColorParam::Mode const color_mode
-      = parse_color_mode_and_advance(sv_color_list);
+    ColorParam::ModeVariant mode = parse_color_mode_and_advance(sv_color_list);
     Plan const plan = parse_color_plan_and_advance(sv_color_list, Plan::fg);
 
-    auto e = sv_color_list.begin();
+    auto p = sv_color_list.begin();
 
     // user palette: [colors...]
-    if (not sv_color_list.empty() && '[' == sv_color_list.front()) {
-      e = std::find(sv_color_list.begin(), sv_color_list.end()-1, ']');
-      if (*e != ']') {
-        throw runtime_cli_error("mismatch ']'");
+    if (!sv_color_list.empty() && '[' == sv_color_list.front()) {
+      p = std::find(p, sv_color_list.end()-1, ']');
+      if (*p != ']') {
+        throw runtime_cli_error("unmatched ']'");
       }
-      color_params.emplace_back(
-        parse_user_palette(builder, {sv_color_list.begin()+1, e}, palettes, plan),
-        color_mode
-      );
+      color_params.emplace_back(ColorParam::Colors{
+        parse_user_palette(
+          builder, {sv_color_list.begin()+1, p}, palettes, plan),
+        std::move(mode)
+      });
       builder.reset();
-      ++e;
+      ++p;
     }
     else {
-      e = std::find(sv_color_list.begin(), sv_color_list.end(), ',');
-      string_view sv_color{sv_color_list.begin(), e};
-      if (parse_single_color(builder, sv_color, plan)) {
-        if (bool(color_mode)) {
+      p = std::find(p, sv_color_list.end(), ',');
+      string_view sv_color{sv_color_list.begin(), p};
+      bool const has_color_mode = bool(mode.index());
+      if (!sv_color.empty() && parse_single_color(builder, sv_color, plan)) {
+        if (has_color_mode) {
           throw runtime_cli_error("color mode with a single color");
         }
       }
       // palette, theme or label
       else {
         auto result_group = parse_pack_color(
-          builder, color_params, sv_color, palettes, color_mode, plan
+          builder, color_params, sv_color, palettes, plan, std::move(mode)
         );
         builder.reset();
-        if (GroupType::Palette != result_group || bool(color_mode)) {
-          if (e != sv_color_list.end()) {
+        if (GroupType::Palette != result_group || has_color_mode) {
+          if (p != sv_color_list.end()) {
             throw runtime_cli_error(
               "label or theme cannot be followed by something"
             );
@@ -555,17 +646,14 @@ void parse_colors(
       }
     }
 
-    if (e != sv_color_list.end() && *e == ',') {
-      ++e;
+    if (p != sv_color_list.end() && *p == ',') {
+      ++p;
     }
-    sv_color_list = {e, sv_color_list.end()};
+    sv_color_list = {p, sv_color_list.end()};
   }
 
   if (!builder.empty()) {
-    color_params.emplace_back(
-      builder.get_color_and_clear(),
-      ColorParam::no_mode
-    );
+    color_params.emplace_back(builder.get_color_and_clear());
   }
 }
 

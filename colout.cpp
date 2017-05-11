@@ -114,75 +114,178 @@ namespace colout
     virtual VisitorResult run(Scanner& scanner, std::string& ctx, string_view sv) = 0;
   };
 
-  struct ColorApplicator
+  struct ColorApplicatorBase
   {
-    template<class T>
-    ColorApplicator(T color)
-    : mColorOrId(in_place_type_t<T>{}, std::move(color))
-    {}
-
-    bool apply(Scanner& scanner, std::string& ctx, string_view sv)
-    {
-      return visit(mColorOrId, overload(
-        [&](ColoutIndex id){
-          std::size_t pos = 0;
-
-          auto res = run_at(scanner, id, ctx, sv);
-          while (res.nextId != invalidIndex)
-          {
-            pos += res.countConsumed;
-            res = run_at(scanner, res.nextId, ctx, sv.substr(pos));
-          }
-          return res.isFound;
-        },
-        [&](Color const& color){
-          ctx
-            .append(begin(color.str()), end(color.str()))
-            .append(begin(sv), end(sv))
-          ;
-          return true;
-        },
-        [&](std::vector<Color> const& colors){
-          // TODO cycle
-          ctx
-            .append(begin(colors[0].str()), end(colors[0].str()))
-            .append(begin(sv), end(sv))
-          ;
-          return true;
-        }
-      ));
-    }
-
-  private:
-    mpark::variant<Color, ColoutIndex, std::vector<Color>> mColorOrId;
+    virtual ~ColorApplicatorBase() {}
+    virtual bool apply(
+      Scanner& scanner, std::string& ctx, string_view sv,
+      std::size_t currentIdxColor) = 0;
   };
 
-  struct ColorSelector
+  struct IndexColorApplicator : ColorApplicatorBase
   {
-    ColorSelector(std::size_t count, bool loop)
-    : mCount(int(count))
-    , mMaxColor(mCount-1)
-    , mModColor(loop ? mCount : std::numeric_limits<int>::max())
-    {
-    }
+    IndexColorApplicator(ColoutIndex id)
+    : mId(id)
+    {}
 
-    std::size_t next_idx()
+    bool apply(
+      Scanner& scanner, std::string& ctx, string_view sv,
+      std::size_t /*currentIdxColor*/) override
     {
-      auto i = std::min(mIColor % mModColor, mMaxColor);
-      ++mIColor;
-      return std::size_t(i);
-    }
+      std::size_t pos = 0;
 
-    void reset()
-    {
-      mIColor = 0;
+      auto res = run_at(scanner, mId, ctx, sv);
+      while (res.nextId != invalidIndex)
+      {
+        pos += res.countConsumed;
+        res = run_at(scanner, res.nextId, ctx, sv.substr(pos));
+      }
+      return res.isFound;
     }
 
   private:
-    int mCount;
-    int mMaxColor;
-    int mModColor;
-    int mIColor = 0;
+    ColoutIndex mId;
+  };
+
+  struct SingleColorApplicator : ColorApplicatorBase
+  {
+    SingleColorApplicator(Color color)
+    : mColor(std::move(color))
+    {}
+
+    bool apply(
+      Scanner&, std::string& ctx, string_view sv,
+      std::size_t /*currentIdxColor*/) override
+    {
+      ctx
+        .append(begin(mColor.str()), end(mColor.str()))
+        .append(begin(sv), end(sv))
+      ;
+      return true;
+    }
+
+  private:
+    Color mColor;
+  };
+
+  struct HashColorApplicator : ColorApplicatorBase
+  {
+    HashColorApplicator(std::vector<Color> colors)
+    : mColors(std::move(colors))
+    {}
+
+    bool apply(
+      Scanner&, std::string& ctx, string_view sv,
+      std::size_t /*currentIdxColor*/) override
+    {
+      auto const & color = mColors[hash(sv) / mDiv];
+      ctx
+        .append(begin(color.str()), end(color.str()))
+        .append(begin(sv), end(sv))
+      ;
+      return true;
+    }
+
+  private:
+    using hash_type = uint32_t;
+    // falcon/functional/fnv.hpp fnv1a_32_fn
+    static hash_type hash(string_view sv)
+    {
+      hash_type h{0x811c9dc5u};
+      for (char c : sv) {
+        h ^= hash_type(static_cast<unsigned char>(c));
+        h *= 0x1000193u;
+      }
+      return h;
+    }
+
+    std::vector<Color> mColors;
+    hash_type mDiv = ~hash_type{} / mColors.size();
+  };
+
+  struct SimpleCycleColorApplicator : ColorApplicatorBase
+  {
+    SimpleCycleColorApplicator(std::vector<Color> colors)
+    : mColors(std::move(colors))
+    {}
+
+    bool apply(
+      Scanner&, std::string& ctx, string_view sv,
+      std::size_t currentIdxColor) override
+    {
+      auto const & color = mColors[std::min(currentIdxColor, mColors.size()-1u)];
+      ctx
+        .append(begin(color.str()), end(color.str()))
+        .append(begin(sv), end(sv))
+      ;
+      return true;
+    }
+
+  private:
+    std::vector<Color> mColors;
+  };
+
+  struct IndexComputer
+  {
+    IndexComputer(std::size_t count, bool loop)
+   : mCount(count)
+   , mMaxColor(mCount-1)
+   , mModColor(loop ? mCount : std::numeric_limits<int>::max())
+    {
+    }
+
+    std::size_t computeIdx(std::size_t i) const
+    {
+      return std::min(i % mModColor, mMaxColor);
+    }
+
+  private:
+    std::size_t mCount;
+    std::size_t mMaxColor;
+    std::size_t mModColor;
+  };
+
+  struct CycleColorApplicator : ColorApplicatorBase
+  {
+    CycleColorApplicator(std::vector<Color> colors, bool loop)
+    : mColors(std::move(colors))
+    , mIndexComputer(mColors.size(), loop)
+    {}
+
+    bool apply(
+      Scanner&, std::string& ctx, string_view sv,
+      std::size_t currentIdxColor) override
+    {
+      auto const & color = mColors[mIndexComputer.computeIdx(currentIdxColor)];
+      ctx
+        .append(begin(color.str()), end(color.str()))
+        .append(begin(sv), end(sv))
+      ;
+      return true;
+    }
+
+  private:
+    std::vector<Color> mColors;
+    IndexComputer mIndexComputer;
+  };
+
+  struct ColorApplicator
+  {
+    template<class T, class... Args>
+    ColorApplicator(mpark::in_place_type_t<T>, Args&&... args)
+    : p(new T{std::forward<Args>(args)...})
+    {
+    }
+
+    bool apply(
+      Scanner& scanner, std::string& ctx, string_view sv,
+      std::size_t currentIdxColor)
+    {
+      return p->apply(scanner, ctx, sv, currentIdxColor);
+    }
+
+  private:
+    std::unique_ptr<ColorApplicatorBase> p;
   };
 
   using F = cli::ActiveFlags;
@@ -197,7 +300,7 @@ namespace colout
       F f
     )
     : mReg(std::move(reg))
-    , mColorSelector(colors.size(), bool(F::loop_color & f))
+    , mIndexComputer(colors.size(), bool(F::loop_color & f))
     , mColors(std::move(colors))
     , mEscReset(std::move(esc_reset))
     , mResetColor(!bool(F::keep_color & f))
@@ -217,14 +320,15 @@ namespace colout
         auto apply_color = [&](size_t isub){
           auto const new_pos = mMatch.position(isub);
           auto const len = mMatch.length(isub);
-          ctx.append(begin(sv) + pos,      begin(sv) + new_pos);
-          if (!mColors[mColorSelector.next_idx()]
-            .apply(scanner, ctx, sv.substr(new_pos, len)))
+          ctx.append(begin(sv) + pos, begin(sv) + new_pos);
+          if (!mColors[mIndexComputer.computeIdx(mCurrentIdxColor)]
+            .apply(scanner, ctx, sv.substr(new_pos, len), mCurrentIdxColor))
           {
             ctx.resize(ctx_sz_saved);
             return false;
           }
-          ctx.append(begin(mEscReset),     end(mEscReset));
+          ++mCurrentIdxColor;
+          ctx.append(begin(mEscReset), end(mEscReset));
           pos = std::size_t(new_pos + len);
           return true;
         };
@@ -256,16 +360,18 @@ namespace colout
 
         if (mEndColorMark)
         {
-          if (!mColors[mColorSelector.next_idx()].apply(scanner, ctx, sv))
+          if (!mColors[mIndexComputer.computeIdx(mCurrentIdxColor)]
+            .apply(scanner, ctx, sv, mCurrentIdxColor))
           {
             ctx.resize(ctx_sz_saved);
             return {false, mBCtx.nextIdFail, 0};
           }
+          ++mCurrentIdxColor;
         }
 
         if (mResetColor)
         {
-          mColorSelector.reset();
+          mCurrentIdxColor = 0;
         }
       }
 
@@ -275,7 +381,8 @@ namespace colout
   private:
     std::regex mReg;
     std::cmatch mMatch;
-    ColorSelector mColorSelector;
+    IndexComputer mIndexComputer;
+    std::size_t mCurrentIdxColor = 0;
     limited_array<ColorApplicator> mColors;
     std::string mEscReset;
     bool mResetColor;
@@ -460,7 +567,6 @@ namespace colout
     return scanner.elems[static_cast<std::size_t>(id)].run(scanner, ctx, sv);
   }
 
-
   using ColoutParamCRef = cli::ColoutParam const&;
   using ColoutParamRef = cli::ColoutParam&;
 
@@ -591,28 +697,70 @@ namespace colout
           limited_array<ColorApplicator> color_applicators(param.colors.size());
           TRACE("color_param.sz: ", param.colors.size());
           assert(param.colors.size());
-          for (cli::ColorParam & color_param :  param.colors)
+          for (cli::ColorParam& color_param : param.colors)
           {
             visit(color_param.color, overload(
+              [](cli::ColorParam::ThemeName){ assert(false); },
+              [](cli::ColorParam::LabelName){ assert(false); },
+              [&](Color& color){
+                TRACE("color_param.color: ", color);
+                color_applicators.emplace_back(
+                  in_place_type_t<SingleColorApplicator>{},
+                  std::move(color)
+                );
+              },
               [&](cli::ColorParam::LabelId id){
                 TRACE("color_param.label: ", int(id));
-                // TODO color mode
-                color_applicators.emplace_back(ColoutIndex(int(id)));
+                color_applicators.emplace_back(
+                  in_place_type_t<IndexColorApplicator>{},
+                  ColoutIndex(int(id))
+                );
               },
-              [&](Color & color){
-                TRACE("color_param.color: ", color);
-                color_applicators.emplace_back(std::move(color));
-              },
-              [&](std::vector<Color> & colors){
+              [&](cli::ColorParam::Colors& param){
+                auto& colors = param.colors;
                 TRACE("color_param.colors: count=", colors.size());
-                // TODO color mode
-                color_applicators.emplace_back(std::move(colors));
-              },
-              [](cli::ColorParam::ThemeName){
-                assert(false);
-              },
-              [](cli::ColorParam::LabelName){
-                assert(false);
+                if (colors.size() == 1)
+                {
+                  color_applicators.emplace_back(
+                    in_place_type_t<SingleColorApplicator>{},
+                    std::move(colors[0])
+                  );
+                }
+                else
+                {
+                  visit(param.mode, overload(
+                    [&](mpark::monostate){
+                      TRACE("SimpleCycle");
+                      color_applicators.emplace_back(
+                        in_place_type_t<SimpleCycleColorApplicator>{},
+                        std::move(colors)
+                      );
+                    },
+                    [&](cli::ColorParam::Modes::Cycle& cycle){
+                      TRACE("Cycle");
+                      // TODO cycle.is_recursive and cycle.color_mode
+                      color_applicators.emplace_back(
+                        in_place_type_t<CycleColorApplicator>{},
+                        std::move(colors), cycle.is_looped
+                      );
+                    },
+                    [&](cli::ColorParam::Modes::Hash&){
+                      TRACE("Hash");
+                      color_applicators.emplace_back(
+                        in_place_type_t<HashColorApplicator>{},
+                        std::move(colors)
+                      );
+                    },
+                    [&](cli::ColorParam::Modes::Random&){
+                      TRACE("Random");
+                      // TODO
+                    },
+                    [&](cli::ColorParam::Modes::Scale&){
+                      TRACE("Scale");
+                      // TODO
+                    }
+                  ));
+                }
               }
             ));
           }

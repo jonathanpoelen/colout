@@ -102,7 +102,9 @@ namespace
 colout::PaletteRef
 colout::Palettes::get(colout::string_view sv) const
 {
-  assert(sv.size());
+  if (sv.empty()) {
+    return def_to_ref(palette_def::default_);
+  }
 
   for (auto & o : palettes) {
     if (o.name == sv) {

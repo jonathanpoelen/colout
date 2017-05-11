@@ -169,6 +169,9 @@ inline int parse_cli(
     //      or `(.+):(\d+) :h y :: -H h r g b`
     //      or `(.+):(\d+) h::h y :: h r g b`
     //      or `(.+):(\d+) h:[r g b] y`
+    //      or `(.+):(\d+) s@0-100@d:[r g b] y`
+    //      or `(.+):(\d+) s/0-100/d:[r g b] y`
+    //      or `(.+):(\d+) s#0-100#d:[r g b] y`
     // TODO scale by length
 
     cli_optv('P', "predefined-regex", "", [](ColoutParam& coloutParam, CStr s){
@@ -198,7 +201,7 @@ inline int parse_cli(
       coloutParam.activated_flags |= ActiveFlags::set_reset_color;
       coloutParam.esc.clear();
     }),
-    cli_optv('K', "set-normal-color", "", [](ColoutParam& coloutParam, CStr s){
+    cli_optv('K', "normal-color", "", [](ColoutParam& coloutParam, CStr s){
       coloutParam.activated_flags |= ActiveFlags::set_reset_color;
       if (*s) {
         coloutParam.esc.clear();
@@ -567,9 +570,43 @@ public:
 
     check_no_wait_next();
 
+    Labels labels{coloutParams};
+
+    load_themes(labels);
+
+    for (auto & param : coloutParams) {
+      for (auto & color_param : param.colors) {
+        if (auto const * label = mpark::get_if<ColorParam::LabelName>(&color_param.color)) {
+          auto const id = ColorParam::LabelId(labels.find(label->name));
+          switch (label->type) {
+            case ColorParam::LabelName::Type::Optional:
+              // TODO Optional is not implemented
+            case ColorParam::LabelName::Type::Label:
+              if (mpark::get_if<mpark::monostate>(&label->mode)) {
+                color_param.color = id;
+              }
+              else {
+                color_param.color = ColorParam::Colors{
+                  get_colors_from_label_id(id), std::move(label->mode)};
+              }
+              break;
+            case ColorParam::LabelName::Type::Reference:
+              color_param.color = ColorParam::Colors{
+                get_colors_from_label_id(id), mpark::monostate{}};
+              break;
+           }
+        }
+      }
+    }
+
+    // TODO optimize go_id (jump and call)
+  }
+
+private:
+  void load_themes(Labels & labels)
+  {
     Themes themes{*this};
 
-    Labels labels{coloutParams};
     auto first = begin(coloutParams);
     auto last = end(coloutParams);
     auto load_theme = [&](std::string theme_name){
@@ -577,7 +614,7 @@ public:
         // /!\ can invalidate first and last iterators
         auto const id = themes.get_id_or_load(std::move(theme_name));
         if (param_sz < coloutParams.size()) {
-          labels = Labels{coloutParams}; // PERF
+          labels = Labels{coloutParams}; // TODO PERF
           first = begin(coloutParams) + (last - first);
           last = end(coloutParams);
         }
@@ -597,23 +634,55 @@ public:
         // /!\ iterators may be invalidated by load_theme
         for (auto i : range(0u, param.colors.size())) {
           ColorParam & color_param = first->colors[i];
-          mpark::visit(overload(
-            [](ColorParam::LabelId){ assert(false); },
-            [](std::vector<Color> const & /*colors*/){},
-            [](Color const & /*color*/){},
-            [&](ColorParam::ThemeName const & theme){
-              auto id = load_theme(theme.name);
-              first->colors[i].color = ColorParam::LabelId(id);
-            },
-            [&](ColorParam::LabelName const & label){
-              color_param.color = ColorParam::LabelId(labels.find(label.name));
-            }
-          ), color_param.color);
+          assert(!mpark::get_if<ColorParam::LabelId>(&color_param.color));
+          if (auto const * theme = mpark::get_if<ColorParam::ThemeName>(&color_param.color)) {
+            first->colors[i].color = ColorParam::LabelId(load_theme(theme->name));
+          }
         }
       }
     }
+  }
 
-    // TODO optimize go_id (jump and call)
+  std::vector<Color> get_colors_from_label_id(ColorParam::LabelId id)
+  {
+    std::vector<cli::ColorParam> const* colors_ptr = nullptr;
+    while (!colors_ptr) {
+      auto& ref_param = coloutParams[std::size_t(id)];
+      switch (ref_param.colors.size()) {
+        case 0:
+          if (ref_param.go_id < 0) {
+            CLI_ERR_IF(
+              !ref_param.colors.size(),
+              "No color on label :" + ref_param.label
+            );
+          }
+          id = ColorParam::LabelId(ref_param.go_id);
+          break;
+        case 1: {
+          auto& color = ref_param.colors[0].color;
+          if (auto* pid = mpark::get_if<ColorParam::LabelId>(&color)) {
+            id = *pid;
+          }
+          else {
+            colors_ptr = &ref_param.colors;
+          }
+        } break;
+        default:
+          colors_ptr = &ref_param.colors;
+      }
+    }
+
+    std::vector<Color> colors;
+    colors.reserve(colors_ptr->size());
+    for (ColorParam const& color_param : *colors_ptr) {
+      auto* pcolor = mpark::get_if<Color>(&color_param.color);
+      CLI_ERR_IF(
+        !pcolor,
+        "invalid color on label :" + coloutParams[std::size_t(id)].label
+      );
+      colors.emplace_back(*pcolor);
+    }
+    return colors;
   }
 };
 
