@@ -76,6 +76,7 @@ namespace cli
         uint64_t seed = 0;
       };
 
+      // TODO scale by len
       struct Scale
       {
         ColorMode color_mode;

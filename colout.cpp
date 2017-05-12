@@ -105,13 +105,16 @@ namespace colout
   class Scanner;
 
   VisitorResult run_at(
-    Scanner& scanner, ColoutIndex id, std::string& ctx, string_view sv
+    Scanner& scanner, ColoutIndex id, std::string& ctx, string_view sv,
+    std::size_t currentLoopIdx
   );
 
   struct VisitorBase
   {
     virtual ~VisitorBase() {}
-    virtual VisitorResult run(Scanner& scanner, std::string& ctx, string_view sv) = 0;
+    virtual VisitorResult run(
+      Scanner& scanner, std::string& ctx, string_view sv,
+      std::size_t currentLoopIdx) /* TODO const */ = 0;
   };
 
   struct ColorApplicatorBase
@@ -119,7 +122,7 @@ namespace colout
     virtual ~ColorApplicatorBase() {}
     virtual bool apply(
       Scanner& scanner, std::string& ctx, string_view sv,
-      std::size_t currentIdxColor) = 0;
+      std::size_t currentColorIdx) = 0;
   };
 
   struct IndexColorApplicator : ColorApplicatorBase
@@ -130,15 +133,16 @@ namespace colout
 
     bool apply(
       Scanner& scanner, std::string& ctx, string_view sv,
-      std::size_t /*currentIdxColor*/) override
+      std::size_t currentColorIdx) override
     {
       std::size_t pos = 0;
 
-      auto res = run_at(scanner, mId, ctx, sv);
+      auto res = run_at(scanner, mId, ctx, sv, currentColorIdx);
       while (res.nextId != invalidIndex)
       {
+        ++currentColorIdx;
         pos += res.countConsumed;
-        res = run_at(scanner, res.nextId, ctx, sv.substr(pos));
+        res = run_at(scanner, res.nextId, ctx, sv.substr(pos), currentColorIdx);
       }
       return res.isFound;
     }
@@ -155,7 +159,7 @@ namespace colout
 
     bool apply(
       Scanner&, std::string& ctx, string_view sv,
-      std::size_t /*currentIdxColor*/) override
+      std::size_t /*currentColorIdx*/) override
     {
       ctx
         .append(begin(mColor.str()), end(mColor.str()))
@@ -176,7 +180,7 @@ namespace colout
 
     bool apply(
       Scanner&, std::string& ctx, string_view sv,
-      std::size_t /*currentIdxColor*/) override
+      std::size_t /*currentColorIdx*/) override
     {
       auto const & color = mColors[hash(sv) / mDiv];
       ctx
@@ -200,7 +204,7 @@ namespace colout
     }
 
     std::vector<Color> mColors;
-    hash_type mDiv = ~hash_type{} / mColors.size();
+    hash_type mDiv = ~hash_type{} / hash_type(mColors.size());
   };
 
   struct SimpleCycleColorApplicator : ColorApplicatorBase
@@ -211,9 +215,9 @@ namespace colout
 
     bool apply(
       Scanner&, std::string& ctx, string_view sv,
-      std::size_t currentIdxColor) override
+      std::size_t currentColorIdx) override
     {
-      auto const & color = mColors[std::min(currentIdxColor, mColors.size()-1u)];
+      auto const & color = mColors[std::min(currentColorIdx, mColors.size()-1u)];
       ctx
         .append(begin(color.str()), end(color.str()))
         .append(begin(sv), end(sv))
@@ -254,9 +258,9 @@ namespace colout
 
     bool apply(
       Scanner&, std::string& ctx, string_view sv,
-      std::size_t currentIdxColor) override
+      std::size_t currentColorIdx) override
     {
-      auto const & color = mColors[mIndexComputer.computeIdx(currentIdxColor)];
+      auto const & color = mColors[mIndexComputer.computeIdx(currentColorIdx)];
       ctx
         .append(begin(color.str()), end(color.str()))
         .append(begin(sv), end(sv))
@@ -279,9 +283,9 @@ namespace colout
 
     bool apply(
       Scanner& scanner, std::string& ctx, string_view sv,
-      std::size_t currentIdxColor)
+      std::size_t currentColorIdx)
     {
-      return p->apply(scanner, ctx, sv, currentIdxColor);
+      return p->apply(scanner, ctx, sv, currentColorIdx);
     }
 
   private:
@@ -309,7 +313,9 @@ namespace colout
     , mBCtx(bctx)
     {}
 
-    VisitorResult run(Scanner& scanner, std::string& ctx, string_view sv) override
+    VisitorResult run(
+      Scanner& scanner, std::string& ctx, string_view sv,
+      std::size_t currentLoopIdx) override
     {
       std::size_t pos = 0;
       std::size_t const ctx_sz_saved = ctx.size();
@@ -317,17 +323,20 @@ namespace colout
 
       if (exists)
       {
+        std::size_t currentColorIdx = mResetColor ? 0u : currentLoopIdx;
+
         auto apply_color = [&](size_t isub){
           auto const new_pos = mMatch.position(isub);
           auto const len = mMatch.length(isub);
           ctx.append(begin(sv) + pos, begin(sv) + new_pos);
-          if (!mColors[mIndexComputer.computeIdx(mCurrentIdxColor)]
-            .apply(scanner, ctx, sv.substr(new_pos, len), mCurrentIdxColor))
+          if (!mColors[mIndexComputer.computeIdx(currentColorIdx)]
+            .apply(scanner, ctx, sv.substr(new_pos, len), currentLoopIdx))
           {
             ctx.resize(ctx_sz_saved);
             return false;
           }
-          ++mCurrentIdxColor;
+          ++currentColorIdx;
+          ++currentLoopIdx;
           ctx.append(begin(mEscReset), end(mEscReset));
           pos = std::size_t(new_pos + len);
           return true;
@@ -360,18 +369,12 @@ namespace colout
 
         if (mEndColorMark)
         {
-          if (!mColors[mIndexComputer.computeIdx(mCurrentIdxColor)]
-            .apply(scanner, ctx, sv, mCurrentIdxColor))
+          if (!mColors[mIndexComputer.computeIdx(currentColorIdx)]
+            .apply(scanner, ctx, sv, currentLoopIdx))
           {
             ctx.resize(ctx_sz_saved);
             return {false, mBCtx.nextIdFail, 0};
           }
-          ++mCurrentIdxColor;
-        }
-
-        if (mResetColor)
-        {
-          mCurrentIdxColor = 0;
         }
       }
 
@@ -382,7 +385,6 @@ namespace colout
     std::regex mReg;
     std::cmatch mMatch;
     IndexComputer mIndexComputer;
-    std::size_t mCurrentIdxColor = 0;
     limited_array<ColorApplicator> mColors;
     std::string mEscReset;
     bool mResetColor;
@@ -399,17 +401,21 @@ namespace colout
     : mImpl(std::forward<Args>(args)...)
     {}
 
-    VisitorResult run(Scanner& scanner, std::string& ctx, string_view sv) override
+    VisitorResult run(
+      Scanner& scanner, std::string& ctx, string_view sv,
+      std::size_t /*currentLoopIdx*/) override
     {
       std::size_t pos = 0;
-      auto res = mImpl.run(scanner, ctx, sv);
+      std::size_t currentLoopIdx = 0;
+      auto res = mImpl.run(scanner, ctx, sv, currentLoopIdx);
       if (res.isFound)
       {
         ColoutIndex const nextId = res.nextId;
         do
         {
+          ++currentLoopIdx;
           pos += res.countConsumed;
-          res = mImpl.run(scanner, ctx, sv.substr(pos));
+          res = mImpl.run(scanner, ctx, sv.substr(pos), currentLoopIdx);
         } while (res.isFound);
         res.isFound = true;
         res.countConsumed = pos;
@@ -431,16 +437,18 @@ namespace colout
     , mBCtx(bctx)
     {}
 
-    VisitorResult run(Scanner& scanner, std::string& ctx, string_view sv) override
+    VisitorResult run(
+      Scanner& scanner, std::string& ctx, string_view sv,
+      std::size_t currentLoopIdx) override
     {
       std::size_t pos = 0;
       std::size_t const ctx_sz_saved = ctx.size();
 
-      auto res = mImpl.run(scanner, ctx, sv);
+      auto res = mImpl.run(scanner, ctx, sv, currentLoopIdx);
       while (res.nextId != invalidIndex)
       {
         pos += res.countConsumed;
-        res = run_at(scanner, res.nextId, ctx, sv.substr(pos));
+        res = run_at(scanner, res.nextId, ctx, sv.substr(pos), currentLoopIdx);
       }
 
       if (res.isFound)
@@ -466,9 +474,11 @@ namespace colout
     : mI(i)
     {}
 
-    VisitorResult run(Scanner& scanner, std::string& ctx, string_view sv) override
+    VisitorResult run(
+      Scanner& scanner, std::string& ctx, string_view sv,
+      std::size_t currentLoopIdx) override
     {
-      return run_at(scanner, mI, ctx, sv);
+      return run_at(scanner, mI, ctx, sv, currentLoopIdx);
     }
 
   private:
@@ -482,9 +492,11 @@ namespace colout
     , mBCtx(bctx)
     {}
 
-    VisitorResult run(Scanner& scanner, std::string& ctx, string_view sv) override
+    VisitorResult run(
+      Scanner& scanner, std::string& ctx, string_view sv,
+      std::size_t currentLoopIdx) override
     {
-      auto res = run_at(scanner, mI, ctx, sv);
+      auto res = run_at(scanner, mI, ctx, sv, currentLoopIdx);
       res.nextId = mBCtx.computeNextId(res.isFound);
       return res;
     }
@@ -501,7 +513,9 @@ namespace colout
     , mI(i)
     {}
 
-    VisitorResult run(Scanner&, std::string&, string_view sv) override
+    VisitorResult run(
+      Scanner&, std::string&, string_view sv,
+      std::size_t /*currentLoopIdx*/) override
     {
       bool const exists = std::regex_search(sv.begin(), sv.end(), mReg);
       return {exists, exists ? mI : invalidIndex, 0};
@@ -520,12 +534,14 @@ namespace colout
     , mBCtx(bctx)
     {}
 
-    VisitorResult run(Scanner& scanner, std::string& ctx, string_view sv) override
+    VisitorResult run(
+      Scanner& scanner, std::string& ctx, string_view sv,
+      std::size_t currentLoopIdx) override
     {
       bool exists = std::regex_search(sv.begin(), sv.end(), mReg);
       if (exists)
       {
-        auto res = run_at(scanner, mI, ctx, sv);
+        auto res = run_at(scanner, mI, ctx, sv, currentLoopIdx);
         res.nextId = mBCtx.computeNextId(res.isFound);
       }
       return {false, mBCtx.nextIdFail, 0};
@@ -548,9 +564,11 @@ namespace colout
       {
       }
 
-      VisitorResult run(Scanner& scanner, std::string& ctx, string_view sv)
+      VisitorResult run(
+        Scanner& scanner, std::string& ctx, string_view sv,
+        std::size_t currentLoopIdx)
       {
-        return p->run(scanner, ctx, sv);
+        return p->run(scanner, ctx, sv, currentLoopIdx);
       }
 
     private:
@@ -560,11 +578,14 @@ namespace colout
     std::vector<Element> elems;
   };
 
-  VisitorResult run_at(Scanner& scanner, ColoutIndex id, std::string& ctx, string_view sv)
+  VisitorResult run_at(
+    Scanner& scanner, ColoutIndex id, std::string& ctx, string_view sv,
+    std::size_t currentLoopIdx)
   {
     assert(id != invalidIndex);
     TRACE("run_at: ", id, " ", sv);
-    return scanner.elems[static_cast<std::size_t>(id)].run(scanner, ctx, sv);
+    return scanner.elems[static_cast<std::size_t>(id)]
+      .run(scanner, ctx, sv, currentLoopIdx);
   }
 
   using ColoutParamCRef = cli::ColoutParam const&;
@@ -841,7 +862,7 @@ int main(int ac, char ** av)
     colout::string_view sv{s.data(), s.size()};
     do
     {
-      auto ret = colout::run_at(scanner, i, ctx, sv);
+      auto ret = colout::run_at(scanner, i, ctx, sv, 0);
       sv.remove_prefix(ret.countConsumed);
       i = ret.nextId;
     } while (i != colout::invalidIndex);

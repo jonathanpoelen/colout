@@ -161,18 +161,6 @@ inline int parse_cli(
     // TODO restart group '( x , y , z , --restart )'
     // TODO break loop '( x , y , z , --break )'
     // TODO --next-line
-    // TODO `:` separator: followed by the description of a label `next_is_label`
-    // TODO `::` separator: like `:`, with REGEX is a label name (implicit `-Pa`)
-    // TODO palette option (opt(s):palette/label) r=reverse, h=hash, s=scale
-    // TODO hash color (hash, h, h:), -H,--hash option `(.+):(\d+) hash y`
-    //      or `(.+):(\d+) :h y : -H -Pa -ah r g b`
-    //      or `(.+):(\d+) :h y :: -H h r g b`
-    //      or `(.+):(\d+) h::h y :: h r g b`
-    //      or `(.+):(\d+) h:[r g b] y`
-    //      or `(.+):(\d+) s@0-100@d:[r g b] y`
-    //      or `(.+):(\d+) s/0-100/d:[r g b] y`
-    //      or `(.+):(\d+) s#0-100#d:[r g b] y`
-    // TODO scale by length
 
     cli_optv('P', "predefined-regex", "", [](ColoutParam& coloutParam, CStr s){
       if (0);

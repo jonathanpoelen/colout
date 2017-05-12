@@ -423,8 +423,13 @@ struct t_ { using type = T; };
  *    [-C,--color-all]
  *    [[-s,--scale] {F|F-F}]
  * )
+ *
+ * TODO h^colors^colors_reset
+ * TODO h~...^colors^colors
+ * TODO t:$`[$&]$' NOTE replacement color $R, ${o,r}
+ * TODO t^$`[$&]$'^$`[$&]$' -> T:replace:replace-for-next
  */
-// [hcsa]:
+// [chas]:
 ColorParam::ModeVariant parse_color_mode_and_advance(string_view & sv_color)
 {
   ColorParam::ModeVariant mode;
