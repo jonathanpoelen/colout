@@ -161,6 +161,8 @@ inline int parse_cli(
     // TODO restart group '( x , y , z , --restart )'
     // TODO break loop '( x , y , z , --break )'
     // TODO --next-line
+    //
+    // TODO . -z::a , . none , . -za h: <<< abc -> [a]b[c] 'a' same as 'c'
 
     cli_optv('P', "predefined-regex", "", [](ColoutParam& coloutParam, CStr s){
       if (0);

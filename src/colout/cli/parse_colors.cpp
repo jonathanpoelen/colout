@@ -412,7 +412,7 @@ struct t_ { using type = T; };
  * Mode(c, opts?) = c':'[color] | c'~' OptColor opts '~'[:][color]
  *
  * cycle  = Mode('c', [-c,--recursive] [-n,--no-loop])
- * hash   = Mode('h')
+ * hash   = Mode('h', [[-p] pattern])
  * random = Mode('a', [-s,--seed I])
  * scale  = Mode('s',
  *    [-U,--units units]
@@ -421,6 +421,7 @@ struct t_ { using type = T; };
  *    [-u,--underflow-color color]
  *    [-c,--coeff] F]
  *    [-C,--color-all]
+ *    [-p,--pattern pattern]
  *    [[-s,--scale] {F|F-F}]
  * )
  *

@@ -38,6 +38,7 @@ SOFTWARE.
 
 #include <iostream>
 #include <iterator>
+#include <random>
 #include <memory>
 
 #include <mpark/variant.hpp>
@@ -227,6 +228,32 @@ namespace colout
 
   private:
     std::vector<Color> mColors;
+  };
+
+  struct RandomColorApplicator : ColorApplicatorBase
+  {
+    RandomColorApplicator(std::vector<Color> colors, unsigned seed = 0)
+    : mColors(std::move(colors))
+    , mEngine(seed)
+    , mDist(0, mColors.size()-1u)
+    {}
+
+    bool apply(
+      Scanner&, std::string& ctx, string_view sv,
+      std::size_t /*currentColorIdx*/) override
+    {
+      auto const & color = mColors[mDist(mEngine)];
+      ctx
+        .append(begin(color.str()), end(color.str()))
+        .append(begin(sv), end(sv))
+      ;
+      return true;
+    }
+
+  private:
+    std::vector<Color> mColors;
+    std::default_random_engine mEngine;
+    std::uniform_int_distribution<std::size_t> mDist;
   };
 
   struct IndexComputer
@@ -772,9 +799,15 @@ namespace colout
                         std::move(colors)
                       );
                     },
-                    [&](cli::ColorParam::Modes::Random&){
+                    [&](cli::ColorParam::Modes::Random& rand){
                       TRACE("Random");
-                      // TODO
+                      color_applicators.emplace_back(
+                        in_place_type_t<RandomColorApplicator>{},
+                        std::move(colors),
+                        rand.seed < 0
+                          ? std::random_device{}()
+                          : unsigned(rand.seed)
+                      );
                     },
                     [&](cli::ColorParam::Modes::Scale&){
                       TRACE("Scale");

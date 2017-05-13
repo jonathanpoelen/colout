@@ -68,18 +68,20 @@ namespace cli
       struct Hash
       {
         ColorMode color_mode;
+        string_view sub_pattern;
       };
 
       struct Random
       {
         ColorMode color_mode;
-        uint64_t seed = 0;
+        int64_t seed = -1;
       };
 
       // TODO scale by len
       struct Scale
       {
         ColorMode color_mode;
+        string_view sub_pattern;
         string_view units;
         struct Unit
         {
