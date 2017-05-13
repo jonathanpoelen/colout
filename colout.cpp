@@ -256,6 +256,48 @@ namespace colout
     std::uniform_int_distribution<std::size_t> mDist;
   };
 
+  struct SimpleScaleColorApplicator : ColorApplicatorBase
+  {
+    SimpleScaleColorApplicator(std::vector<Color> colors, double min, double max)
+    : mColors(std::move(colors))
+    , mMin(min)
+    , mMax(max)
+    {
+      assert(min < max);
+    }
+
+    bool apply(
+      Scanner&, std::string& ctx, string_view sv,
+      std::size_t /*currentColorIdx*/) override
+    {
+      char & mutableChar = const_cast<char&>(sv.data()[sv.size()]);
+      auto const oldChar = std::exchange(mutableChar, '\0');
+      double val = strtod(sv.data(), nullptr);
+      mutableChar = oldChar;
+
+      auto const & color = mColors[
+        (errno == ERANGE)
+        ? 0
+        : std::min(
+          std::size_t((std::max(mMin, std::min(val, mMax)) - mMin) / mDiv),
+          mMaxIdx
+        )
+      ];
+      ctx
+        .append(begin(color.str()), end(color.str()))
+        .append(begin(sv), end(sv))
+      ;
+      return true;
+    }
+
+  private:
+    std::vector<Color> mColors;
+    double mMin;
+    double mMax;
+    double mDiv = std::abs(mMax-mMin) / double(mColors.size());
+    std::size_t mMaxIdx = mColors.size() - 1;
+  };
+
   struct IndexComputer
   {
     IndexComputer(std::size_t count, bool loop)
@@ -766,6 +808,7 @@ namespace colout
               },
               [&](cli::ColorParam::Colors& param){
                 auto& colors = param.colors;
+                assert(!colors.empty());
                 TRACE("color_param.colors: count=", colors.size());
                 if (colors.size() == 1)
                 {
@@ -809,9 +852,13 @@ namespace colout
                           : unsigned(rand.seed)
                       );
                     },
-                    [&](cli::ColorParam::Modes::Scale&){
+                    [&](cli::ColorParam::Modes::Scale& scale){
                       TRACE("Scale");
-                      // TODO
+                      // TODO other members
+                      color_applicators.emplace_back(
+                        in_place_type_t<SimpleScaleColorApplicator>{},
+                        std::move(colors), scale.scale_min, scale.scale_max
+                      );
                     }
                   ));
                 }
