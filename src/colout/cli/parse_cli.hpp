@@ -170,19 +170,6 @@ namespace cli
     }
   };
 
-  struct runtime_cli_error final : std::runtime_error
-  {
-    explicit runtime_cli_error(const char* msg)
-    : std::runtime_error(msg)
-    {}
-    explicit runtime_cli_error(std::string&& msg)
-    : std::runtime_error(std::move(msg))
-    {}
-    explicit runtime_cli_error(std::string const& msg)
-    : std::runtime_error(msg)
-    {}
-  };
-
   int parse_cli(
     GlobalParam& coloutGlobalParam,
     ColoutParam& coloutParam,

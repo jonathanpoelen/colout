@@ -6,6 +6,7 @@
 #include "colout/palette.hpp"
 #include "colout/cli/parse_cli.hpp"
 #include "colout/cli/parse_colors.hpp"
+#include "colout/cli/runtime_cli_error.hpp"
 #include "colout/utils/c_string.hpp"
 
 #define SV(s) colout::c_string(s)

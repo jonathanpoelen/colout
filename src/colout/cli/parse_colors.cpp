@@ -32,7 +32,7 @@ SOFTWARE.
 #include "colout/color.hpp"
 #include "colout/palette.hpp"
 #include "colout/cli/parse_cli.hpp"
-#include "colout/cli/parse_cli.hpp"
+#include "colout/cli/parse_options.hpp"
 #include "colout/cli/parse_colors.hpp"
 #include "colout/utils/c_string.hpp"
 #include "colout/utils/get_lines.hpp"

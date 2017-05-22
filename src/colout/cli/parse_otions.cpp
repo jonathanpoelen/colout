@@ -32,7 +32,6 @@ SOFTWARE.
 #include "colout/cli/parse_colors.hpp"
 #include "colout/utils/range.hpp"
 #include "colout/utils/overload.hpp"
-#include "colout/cli/parse_options.hpp"
 
 #include <falcon/cxx/cxx.hpp>
 
@@ -107,53 +106,65 @@ void cli_set_int(T & x, char const*& s, char end_c)
   s = end+1;
 }
 
+template<class F, bool HasValue>
+struct CliParam
+{
+  constexpr static bool has_value = HasValue;
+  char c;
+  zstring s;
+  zstring help;
+  F f;
+};
+
+
 using S = std::string;
 //using F = ActiveFlags;
 using CStr = char const*;
 //using Param = ColoutParam;
-
-template<char c>
-constexpr auto C = std::integral_constant<char, c>{};
 
 inline int parse_cli(
   GlobalParam& globalParam,
   ColoutParam& coloutParam,
   int ac, char const* const* av
 ) {
-  auto cli_flag = [](auto c, zstring zstr, zstring help, ActiveFlags f) {
-    auto lbd = [f](CStr, ColoutParam& coloutParam){
+  auto cli_flag = [](char c, zstring zstr, zstring help, ActiveFlags f) {
+    auto lbd = [f](ColoutParam& coloutParam, CStr){
       coloutParam.activated_flags |= f;
     };
-    return CliParam<c, decltype(lbd), HasArgument::No>{zstr, help, lbd};
+    return CliParam<decltype(lbd), 0>{c, zstr, help, lbd};
   };
 
-  auto cli_optv = [](auto c, zstring zstr, zstring help, auto f) {
-    return CliParam<c, decltype(f), HasArgument::Required>{zstr, help, f};
+  auto cli_optv = [](char c, zstring zstr, zstring help, auto f) {
+    return CliParam<decltype(f), 1>{c, zstr, help, f};
   };
 
   // TODO
   FALCON_DIAGNOSTIC_PUSH
   FALCON_DIAGNOSTIC_GCC_IGNORE("-Wunused-parameter")
 
-  auto po = make_program_options(
-    cli_flag(C<'h'>, "help", "", ActiveFlags::help),
-    cli_flag(C<'w'>, "loop", "", ActiveFlags::loop_regex),
-    cli_flag(C<'c'>, "loop-color", "", ActiveFlags::loop_color),
-    cli_flag(C<'k'>, "keep-colormap", "", ActiveFlags::keep_color),
-    cli_flag(C<'N'>, "lc-numeric", "", ActiveFlags::lc_numeric),
-    cli_flag(C<'o'>, "use-locale", "", ActiveFlags::use_locale),
-    cli_flag(C<'h'>, "scale-hidden", "", ActiveFlags::hidden_scale),
-    cli_flag(C<'j'>, "log", "", ActiveFlags::scale | ActiveFlags::scale_log),
-    cli_flag(C<'e'>, "exp", "", ActiveFlags::scale | ActiveFlags::scale_exp),
-    cli_flag(C<'D'>, "div", "", ActiveFlags::scale | ActiveFlags::scale_div),
-    cli_flag(C<'i'>, "ignore-case", "", ActiveFlags::ignore_case),
+  auto cli_options = [](auto... opts) {
+    return [opts...](auto cli_f){
+      return cli_f(opts...);
+    };
+  }(
+    cli_flag('h', "help", "", ActiveFlags::help),
+    cli_flag('w', "loop", "", ActiveFlags::loop_regex),
+    cli_flag('c', "loop-color", "", ActiveFlags::loop_color),
+    cli_flag('k', "keep-colormap", "", ActiveFlags::keep_color),
+    cli_flag('N', "lc-numeric", "", ActiveFlags::lc_numeric),
+    cli_flag('o', "use-locale", "", ActiveFlags::use_locale),
+    cli_flag('h', "scale-hidden", "", ActiveFlags::hidden_scale),
+    cli_flag('j', "log", "", ActiveFlags::scale | ActiveFlags::scale_log),
+    cli_flag('e', "exp", "", ActiveFlags::scale | ActiveFlags::scale_exp),
+    cli_flag('D', "div", "", ActiveFlags::scale | ActiveFlags::scale_div),
+    cli_flag('i', "ignore-case", "", ActiveFlags::ignore_case),
     // TODO restart group '( x , y , z , --restart )'
     // TODO break loop '( x , y , z , --break )'
     // TODO --next-line
     //
-    // TODO . z~a , . none , . -za h: <<< abc -> [a]b[c] 'a' same as 'c'
+    // TODO . -z::a , . none , . -za h: <<< abc -> [a]b[c] 'a' same as 'c'
 
-    cli_optv(C<'P'>, "predefined-regex", "", [](CStr s, ColoutParam& coloutParam){
+    cli_optv('P', "predefined-regex", "", [](ColoutParam& coloutParam, CStr s){
       if (0);
       #define M(n, S, d) else if (strcmp(S, s) == 0) \
         coloutParam.predefined_regex = PredefinedRegex::n;
@@ -167,7 +178,7 @@ inline int parse_cli(
       coloutParam.regex.clear();
     }),
 
-    cli_optv(C<'l'>, "line", "", [](CStr, ColoutParam& coloutParam){
+    cli_optv('l', "line", "", [](ColoutParam& coloutParam, CStr){
       coloutParam.activated_flags |=
         ActiveFlags::keep_color
       | ActiveFlags::regex
@@ -176,11 +187,11 @@ inline int parse_cli(
       coloutParam.regex.clear();
     }),
 
-    cli_optv(C<'r'>, "no-reset-color", "", [](CStr, ColoutParam& coloutParam){
+    cli_optv('r', "no-reset-color", "", [](ColoutParam& coloutParam, CStr){
       coloutParam.activated_flags |= ActiveFlags::set_reset_color;
       coloutParam.esc.clear();
     }),
-    cli_optv(C<'K'>, "normal-color", "", [](CStr s, ColoutParam& coloutParam){
+    cli_optv('K', "normal-color", "", [](ColoutParam& coloutParam, CStr s){
       coloutParam.activated_flags |= ActiveFlags::set_reset_color;
       if (*s) {
         coloutParam.esc.clear();
@@ -192,13 +203,13 @@ inline int parse_cli(
       }
     }),
 
-    cli_optv(C<'p'>, "regex", "", [](CStr s, ColoutParam& coloutParam){
+    cli_optv('p', "regex", "", [](ColoutParam& coloutParam, CStr s){
       coloutParam.regex = s;
       coloutParam.activated_flags |= ActiveFlags::regex;
       coloutParam.predefined_regex = PredefinedRegex::none;
     }),
 
-    cli_optv(C<'s'>, "scale", "", [](CStr s, ColoutParam& coloutParam){
+    cli_optv('s', "scale", "", [](ColoutParam& coloutParam, CStr s){
       // TODO auto-scale x or x,x or x+20,x-22
       cli_set_int(coloutParam.scale_min, s, ',');
       cli_set_int(coloutParam.scale_max, s);
@@ -211,36 +222,36 @@ inline int parse_cli(
 
     // TODO overflow/underflow scale = label | color | '-' | ''
 
-    cli_optv(C<'u'>, "units", "", [](CStr s, ColoutParam& coloutParam){
+    cli_optv('u', "units", "", [](ColoutParam& coloutParam, CStr s){
       CLI_ERR_IF(!*s, "is empty");
       CLI_ERR_IF(coloutParam.has_units(), "there are already units");
       coloutParam.activated_flags |= ActiveFlags::scale;
       coloutParam.units = s;
     }),
-    cli_optv(C<'U'>, "units-expr", "", [](CStr s, ColoutParam& coloutParam){
+    cli_optv('U', "units-expr", "", [](ColoutParam& coloutParam, CStr s){
       CLI_ERR_IF(!*s, "is empty");
       CLI_ERR_IF(coloutParam.has_units(), "there are already units");
       coloutParam.activated_flags |= ActiveFlags::scale;
       // TODO
     }),
-    cli_optv(C<'E'>, "coeff", "", [](CStr s, ColoutParam& coloutParam){
+    cli_optv('E', "coeff", "", [](ColoutParam& coloutParam, CStr s){
       cli_set_int(coloutParam.unit_coeff, s);
       coloutParam.activated_flags |= ActiveFlags::scale;
     }),
-    cli_optv(C<'g'>, "group", "", [](CStr s, ColoutParam& coloutParam){
+    cli_optv('g', "group", "", [](ColoutParam& coloutParam, CStr s){
       cli_set_int(coloutParam.scale_match, s);
       coloutParam.activated_flags |= ActiveFlags::scale;
     }),
-    cli_optv(C<'S'>, "select-unit", "", [](CStr s, ColoutParam& coloutParam){
+    cli_optv('S', "select-unit", "", [](ColoutParam& coloutParam, CStr s){
       // TODO
       coloutParam.activated_flags |= ActiveFlags::scale;
     }),
 
-    cli_optv(C<'W'>, "n-loop", "", [](CStr s, ColoutParam& coloutParam){
+    cli_optv('W', "n-loop", "", [](ColoutParam& coloutParam, CStr s){
       cli_set_int(coloutParam.n_loop, s);
       coloutParam.activated_flags |= ActiveFlags::set_n_loop;
     }),
-    cli_optv(C<'T'>, "regex-type", "", [](CStr s, ColoutParam& coloutParam){
+    cli_optv('T', "regex-type", "", [](ColoutParam& coloutParam, CStr s){
       #define elif(name, value) else if (0 == strcmp(s, #name)) \
       coloutParam.regex_type = std::regex_constants::value
       if (0) {}
@@ -257,44 +268,44 @@ inline int parse_cli(
       // TODO perl, string, ...
       else CLI_ERR_IF(1, "bad value");
     }),
-    cli_optv(C<'t'>, "theme", "", [](CStr s, ColoutParam& coloutParam){
+    cli_optv('t', "theme", "", [](ColoutParam& coloutParam, CStr s){
       CLI_ERR_IF(!*s, "is empty");
       coloutParam.activated_flags |= ActiveFlags::theme;
       coloutParam.go_label = s;
     }),
-    cli_optv(C<'L'>, "list", "", [](CStr s, ColoutParam& coloutParam){
+    cli_optv('L', "list", "", [](ColoutParam& coloutParam, CStr s){
       // TODO
     }),
-    cli_optv(C<'a'>, "label", "", [](CStr s, ColoutParam& coloutParam){
+    cli_optv('a', "label", "", [](ColoutParam& coloutParam, CStr s){
       CLI_ERR_IF(!*s, "is empty");
       coloutParam.label = s;
     }),
-    cli_optv(C<'G'>, "goto-label", "", [](CStr s, ColoutParam& coloutParam){
+    cli_optv('G', "goto-label", "", [](ColoutParam& coloutParam, CStr s){
       CLI_ERR_IF(!*s, "is empty");
       coloutParam.activated_flags &= ~ActiveFlags::jump_flags;
       coloutParam.activated_flags |= ActiveFlags::goto_label;
       coloutParam.go_label = s;
     }),
-    cli_optv(C<'C'>, "call-label", "", [](CStr s, ColoutParam& coloutParam){
+    cli_optv('C', "call-label", "", [](ColoutParam& coloutParam, CStr s){
       CLI_ERR_IF(!*s, "is empty");
       coloutParam.activated_flags &= ~ActiveFlags::jump_flags;
       coloutParam.activated_flags |= ActiveFlags::call_label;
       coloutParam.go_label = s;
     }),
-    cli_optv(C<'d'>, "delimiter", "", [](CStr s, GlobalParam& globalParam){
+    cli_optv('d', "delimiter", "", [](GlobalParam& globalParam, CStr s){
       CLI_ERR_IF(!*s, "is empty");
       CLI_ERR_IF(s[1], "too long");
       globalParam.delim_style = *s;
     }),
-    cli_optv(C<'O'>, "locale", "", [](CStr s, ColoutParam& coloutParam){
+    cli_optv('O', "locale", "", [](ColoutParam& coloutParam, CStr s){
       if (*s) {
         coloutParam.locale = s;
       }
     }),
-    cli_optv(C<'\0'>, "continue-from-last-color", "", [](CStr, ColoutParam& coloutParam){
+    cli_optv('\0', "continue-from-last-color", "", [](ColoutParam& coloutParam, CStr){
       coloutParam.activated_flags |= ActiveFlags::continue_from_last_color;
     }),
-    cli_optv(C<'\0'>, "end-color-mark", "", [](CStr s, ColoutParam& coloutParam){
+    cli_optv('\0', "end-color-mark", "", [](ColoutParam& coloutParam, CStr s){
       coloutParam.activated_flags |= ActiveFlags::end_color_mark;
     })
     // TODO tag, push, pop, gpush, spush, repush
@@ -303,6 +314,23 @@ inline int parse_cli(
 
   FALCON_DIAGNOSTIC_POP
 
+  enum class State {
+    unknown, fail, ok, ok_arg
+  };
+
+  auto for_each_options = [&cli_options](auto f){
+    return cli_options([f](auto & ... opts){
+      State st = State::unknown;
+      FALCON_UNPACK(st == State::unknown ? void(st = f(opts)) : void());
+      CLI_ERR_IF(st == State::unknown, "unknown option");
+      return st;
+    });
+  };
+
+  int optint = 0;
+  char current_single_opt[2] {};
+  zstring current_long_opt = nullptr;
+
   struct
   {
     ColoutParam& coloutParam;
@@ -310,15 +338,94 @@ inline int parse_cli(
 
     operator ColoutParam& () const { return coloutParam; }
     operator GlobalParam& () const { return globalParam; }
-  } ctx {
+  } values_ctx {
     coloutParam, globalParam
   };
 
-  int optint = po.parse_command_line(ac, av, ctx);
-  if (optint < 0 || bool(coloutParam.activated_flags & ActiveFlags::help)) {
-    po.help();
-    return 0;
+  try {
+    for (; optint < ac; ++optint) {
+      char const* arg = av[optint];
+      if (arg[0] != '-') {
+        break;
+      }
+      // long option
+      if (arg[1] == '-') {
+        if (arg[2] == '\0') {
+          ++optint;
+          break;
+        }
+        zstring zview = &arg[2];
+        current_single_opt[0] = 0;
+        current_long_opt = &arg[0];
+        for_each_options(
+          [&zview, &values_ctx, &optint, ac, av](auto const & opt){
+            // TODO = support: --name=value and --name=
+            if (opt.s == zview) {
+              if (opt.has_value) {
+                CLI_ERR_IF(
+                  optint+1 == ac,
+                  S("`--") + zview.c_str() + "` requires a value"
+                );
+                opt.f(values_ctx, av[optint+1]);
+                ++optint;
+                return State::ok;
+              }
+              else {
+                opt.f(values_ctx, {});
+                return State::ok;
+              }
+            }
+            return State::unknown;
+          }
+        );
+      }
+      // short option
+      else {
+        current_long_opt = nullptr;
+        current_single_opt[0] = 0;
+        while (*++arg) {
+          current_single_opt[0] = *arg;
+          if (State::ok_arg == for_each_options(
+            [&arg, &values_ctx, &optint, ac, av](auto const & opt){
+              if (opt.c == *arg) {
+                if (opt.has_value) {
+                  if (arg[1]) {
+                    opt.f(values_ctx, arg+1);
+                    --optint;
+                    return State::ok_arg;
+                  }
+                  CLI_ERR_IF(
+                    optint+1 == ac,
+                    S("-`") + opt.c + "` requires a value"
+                  );
+                  opt.f(values_ctx, av[optint+1]);
+                  return State::ok_arg;
+                }
+                else {
+                  opt.f(values_ctx, {});
+                  return State::ok;
+                }
+              }
+              return State::unknown;
+            }
+          )) {
+            ++optint;
+            break;
+          }
+        }
+      }
+    }
   }
+  catch (runtime_cli_error const & err) {
+    if (current_long_opt) {
+      std::cerr << current_long_opt << ": " << err.what() << std::endl;
+    }
+    else {
+      std::cerr << "-" << current_single_opt << ": " << err.what() << std::endl;
+    }
+    return -1;
+  }
+
   return optint;
 }
 
@@ -712,8 +819,9 @@ void colout_parse_cli_impl(ColoutParamAst & ast, Args args)
   while (args.is_valid()) {
     ColoutParam& coloutParam = ast.new_element();
     int optint = parse_cli(globalParam, coloutParam, args.ac(), args.av());
-    if (optint <= 0) {
-      // TODO return error if optint < 0
+    if (optint < 0) {
+      std::cout << "help: " << "\n";
+      // TODO help
       break;
     }
     args.next(optint);
