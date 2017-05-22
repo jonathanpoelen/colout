@@ -173,6 +173,17 @@ namespace colout
     Color mColor;
   };
 
+  using hash_type = uint32_t;
+  inline hash_type hash(string_view sv)
+  {
+    // DJB2 hash variant
+    hash_type h = 0;
+    for (char c : sv) {
+      h ^= (h << 5) + (h >> 2) + c;
+    }
+    return h;
+  }
+
   struct HashColorApplicator : ColorApplicatorBase
   {
     HashColorApplicator(std::vector<Color> colors)
@@ -183,7 +194,7 @@ namespace colout
       Scanner&, std::string& ctx, string_view sv,
       std::size_t /*currentColorIdx*/) override
     {
-      auto const & color = mColors[hash(sv) / mDiv];
+      auto const & color = mColors[hash(sv) % mColors.size()];
       ctx
         .append(begin(color.str()), end(color.str()))
         .append(begin(sv), end(sv))
@@ -192,20 +203,7 @@ namespace colout
     }
 
   private:
-    using hash_type = uint32_t;
-    // falcon/functional/fnv.hpp fnv1a_32_fn
-    static hash_type hash(string_view sv)
-    {
-      hash_type h{0x811c9dc5u};
-      for (char c : sv) {
-        h ^= hash_type(static_cast<unsigned char>(c));
-        h *= 0x1000193u;
-      }
-      return h;
-    }
-
     std::vector<Color> mColors;
-    hash_type mDiv = ~hash_type{} / hash_type(mColors.size());
   };
 
   struct SimpleCycleColorApplicator : ColorApplicatorBase
