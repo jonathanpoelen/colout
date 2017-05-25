@@ -9,7 +9,17 @@
 #include "colout/cli/runtime_cli_error.hpp"
 #include "colout/utils/c_string.hpp"
 
-#define SV(s) colout::c_string(s)
+namespace
+{
+  colout::cli::Args args = {0, nullptr};
+
+  colout::cli::InOut<colout::cli::Args>
+  SV(char const * s)
+  {
+    args = colout::cli::Args(1, &s);
+    return inout(args);
+  }
+}
 
 BOOST_AUTO_TEST_CASE(Color)
 {
@@ -93,10 +103,9 @@ BOOST_AUTO_TEST_CASE(Color)
   TEST_MODE_PALETTE("h:rainbow", Hash, "\033[38;35m", 6);
   TEST_MODE_PALETTE("h:[rainbow]", Hash, "\033[38;35m", 6);
   TEST_MODE_PALETTE("h:[rainbow r rainbow]", Hash, "\033[38;35m", 13);
-  TEST_MODE_PALETTE("o,h:rainbow", Hash, "\033[1;38;35m", 6);
-  TEST_MODE_PALETTE("o,h:[rainbow]", Hash, "\033[1;38;35m", 6);
   TEST_MODE_PALETTE("h:o,rainbow", Hash, "\033[1;38;35m", 6);
-  TEST_MODE_PALETTE("o,h:[rainbow r rainbow]", Hash, "\033[1;38;35m", 13);
+  TEST_MODE_PALETTE("h:o,[rainbow]", Hash, "\033[1;38;35m", 6);
+  TEST_MODE_PALETTE("h:o,[rainbow r rainbow]", Hash, "\033[1;38;35m", 13);
   TEST_MODE_PALETTE("[r]", mpark::monostate, "\033[31m", 1);
   TEST_MODE_PALETTE("c:[r]", Cycle, "\033[31m", 1);
   TEST_MODE_PALETTE("[r g b]", mpark::monostate, "\033[31m", 3);

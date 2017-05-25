@@ -45,7 +45,8 @@ namespace colout
     using const_iterator = iterator;
 
     constexpr string_view() = default;
-    constexpr string_view(std::nullptr_t) = delete;
+    constexpr string_view(std::nullptr_t) noexcept
+    {}
 
     constexpr string_view(char const * s, char const * send) noexcept
     : s_(s)

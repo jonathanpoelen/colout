@@ -142,6 +142,45 @@ namespace cli
     {}
   };
 
+  struct Args
+  {
+    Args(int ac, char const*const* av)
+   : first_(av)
+   , last_(av+ac)
+    {}
+
+    char const* current() const noexcept { assert(is_valid()); return *first_; }
+    bool is_valid() const noexcept { return first_ < last_; }
+    void next() noexcept { assert(is_valid()); ++first_; }
+    void next(int n) noexcept { assert(is_valid()); first_ += n; }
+
+    int ac() const noexcept { return int(last_ - first_); }
+    char const*const* av() const noexcept { return first_; }
+
+  private:
+    char const*const* first_;
+    char const*const* last_;
+  };
+
+  template<class T>
+  struct InOut
+  {
+    T & value;
+
+    explicit InOut(T & val)
+    : value(val)
+    {}
+  };
+
+  template<class T>
+  InOut<T> inout(T & x) noexcept
+  {
+    return InOut<T>{x};
+  }
+
+  template<class T>
+  InOut<T> inout(T const & x) = delete;
+
   void parse_color(
     ColorBuilder & builder,
     string_view sv_color,
@@ -151,7 +190,7 @@ namespace cli
   void parse_colors(
     ColorBuilder & builder,
     std::vector<ColorParam> & colors,
-    string_view rng,
+    InOut<Args> args,
     Palettes const & palettes
   );
 

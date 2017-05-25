@@ -40,80 +40,19 @@ SOFTWARE.
 #include <fstream>
 #include <limits>
 
-#include <cstdlib>
 #include <cerrno>
 #include <cassert>
 
+// #define DEBUG_TRACE
+#include "colout/trace.hpp"
+
 
 namespace colout { namespace cli {
-
-inline unsigned strtou(const char* s, char** end, int base)
-{
-  auto x = strtoul(s, end, base);
-  if (x > std::numeric_limits<unsigned>::max()) {
-    errno = ERANGE;
-  }
-  return static_cast<uint>(x);
-}
-
-inline int strtoi(const char* s, char** end, int base)
-{
-  auto x = strtol(s, end, base);
-  if (x < std::numeric_limits<unsigned>::min()) {
-    errno = ERANGE;
-  }
-  if (x > std::numeric_limits<unsigned>::max()) {
-    errno = ERANGE;
-  }
-  return static_cast<int>(x);
-}
-
-#define CLI_ERR_IF(x, msg) do { if (x) throw runtime_cli_error{msg}; } while (0)
-
-using sint = int;
-using slint = long;
-using sllint = long long;
-using uint = unsigned;
-using ulint = unsigned long;
-using ullint = unsigned long long;
-using ldouble = long double;
-
-template<class T> T ston(const char* s, char** end) = delete;
-template<> int ston<int>(const char* s, char** end) { return strtoi(s, end, 10); }
-template<> slint ston<slint>(const char* s, char** end) { return strtol(s, end, 10); }
-template<> sllint ston<sllint>(const char* s, char** end) { return strtoll(s, end, 10); }
-template<> uint ston<uint>(const char* s, char** end) { return strtou(s, end, 10); }
-template<> ulint ston<ulint>(const char* s, char** end) { return strtoul(s, end, 10); }
-template<> ullint ston<ullint>(const char* s, char** end) { return strtoull(s, end, 10); }
-template<> double ston<double>(const char* s, char** end) { return strtod(s, end); }
-template<> ldouble ston<ldouble>(const char* s, char** end) { return strtold(s, end); }
-
-template<class T>
-void cli_set_int(T & x, char const* s)
-{
-  char* end;
-  x = ston<T>(s, &end);
-  CLI_ERR_IF(errno == ERANGE, "out of range");
-  CLI_ERR_IF(end == s || *end, "bad value");
-}
-
-template<class T>
-void cli_set_int(T & x, char const*& s, char end_c)
-{
-  char* end;
-  x = ston<T>(s, &end);
-  CLI_ERR_IF(errno == ERANGE, "out of range");
-  CLI_ERR_IF(end == s || *end != end_c, "bad value");
-  s = end+1;
-}
 
 using S = std::string;
 //using F = ActiveFlags;
 using CStr = char const*;
 //using Param = ColoutParam;
-
-template<char c>
-constexpr auto C = std::integral_constant<char, c>{};
 
 inline int parse_cli(
   GlobalParam& globalParam,
@@ -142,10 +81,6 @@ inline int parse_cli(
     cli_flag(C<'k'>, "keep-colormap", "", ActiveFlags::keep_color),
     cli_flag(C<'N'>, "lc-numeric", "", ActiveFlags::lc_numeric),
     cli_flag(C<'o'>, "use-locale", "", ActiveFlags::use_locale),
-    cli_flag(C<'h'>, "scale-hidden", "", ActiveFlags::hidden_scale),
-    cli_flag(C<'j'>, "log", "", ActiveFlags::scale | ActiveFlags::scale_log),
-    cli_flag(C<'e'>, "exp", "", ActiveFlags::scale | ActiveFlags::scale_exp),
-    cli_flag(C<'D'>, "div", "", ActiveFlags::scale | ActiveFlags::scale_div),
     cli_flag(C<'i'>, "ignore-case", "", ActiveFlags::ignore_case),
     // TODO restart group '( x , y , z , --restart )'
     // TODO break loop '( x , y , z , --break )'
@@ -196,44 +131,6 @@ inline int parse_cli(
       coloutParam.regex = s;
       coloutParam.activated_flags |= ActiveFlags::regex;
       coloutParam.predefined_regex = PredefinedRegex::none;
-    }),
-
-    cli_optv(C<'s'>, "scale", "", [](CStr s, ColoutParam& coloutParam){
-      // TODO auto-scale x or x,x or x+20,x-22
-      cli_set_int(coloutParam.scale_min, s, ',');
-      cli_set_int(coloutParam.scale_max, s);
-      CLI_ERR_IF(
-        coloutParam.scale_min >= coloutParam.scale_max,
-        "min is greater than max"
-      );
-      coloutParam.activated_flags |= ActiveFlags::scale;
-    }),
-
-    // TODO overflow/underflow scale = label | color | '-' | ''
-
-    cli_optv(C<'u'>, "units", "", [](CStr s, ColoutParam& coloutParam){
-      CLI_ERR_IF(!*s, "is empty");
-      CLI_ERR_IF(coloutParam.has_units(), "there are already units");
-      coloutParam.activated_flags |= ActiveFlags::scale;
-      coloutParam.units = s;
-    }),
-    cli_optv(C<'U'>, "units-expr", "", [](CStr s, ColoutParam& coloutParam){
-      CLI_ERR_IF(!*s, "is empty");
-      CLI_ERR_IF(coloutParam.has_units(), "there are already units");
-      coloutParam.activated_flags |= ActiveFlags::scale;
-      // TODO
-    }),
-    cli_optv(C<'E'>, "coeff", "", [](CStr s, ColoutParam& coloutParam){
-      cli_set_int(coloutParam.unit_coeff, s);
-      coloutParam.activated_flags |= ActiveFlags::scale;
-    }),
-    cli_optv(C<'g'>, "group", "", [](CStr s, ColoutParam& coloutParam){
-      cli_set_int(coloutParam.scale_match, s);
-      coloutParam.activated_flags |= ActiveFlags::scale;
-    }),
-    cli_optv(C<'S'>, "select-unit", "", [](CStr s, ColoutParam& coloutParam){
-      // TODO
-      coloutParam.activated_flags |= ActiveFlags::scale;
     }),
 
     cli_optv(C<'W'>, "n-loop", "", [](CStr s, ColoutParam& coloutParam){
@@ -569,26 +466,6 @@ private:
   }
 };
 
-struct Args : colout::Range<char const*const*>
-{
-  Args(int ac, char const*const* av)
-  : first_(av)
-  , last_(av+ac)
-  {}
-
-  char const* current() const noexcept { assert(is_valid()); return *first_; }
-  bool is_valid() const noexcept { return first_ < last_; }
-  void next() noexcept { assert(is_valid()); ++first_; }
-  void next(int n) noexcept { assert(is_valid()); first_ += n; }
-
-  int ac() const noexcept { return int(last_ - first_); }
-  char const*const* av() const noexcept { return first_; }
-
-private:
-  char const*const* first_;
-  char const*const* last_;
-};
-
 void colout_parse_cli_impl(ColoutParamAst & ast, Args args);
 
 /**
@@ -712,16 +589,25 @@ void colout_parse_cli_impl(ColoutParamAst & ast, Args args)
   while (args.is_valid()) {
     ColoutParam& coloutParam = ast.new_element();
     int optint = parse_cli(globalParam, coloutParam, args.ac(), args.av());
-    if (optint <= 0) {
+    if (optint < 0) {
+        std::cout << "error: " << optint << "\n";
       // TODO return error if optint < 0
       break;
     }
     args.next(optint);
 
     if (!args.is_valid()) {
-      std::cout << "error: " << optint << "\n";
       // TODO error, except label, regex, theme
-      // TODO default color
+      if (!bool(coloutParam.activated_flags & ActiveFlags::regex)) {
+        std::cout << "error: " << optint << "\n";
+        break;
+      }
+      parse_colors(
+        ast.colorBuilder,
+        coloutParam.colors,
+        inout(args),
+        ast.palettes
+      );
       break;
     }
 
@@ -734,6 +620,7 @@ void colout_parse_cli_impl(ColoutParamAst & ast, Args args)
 
     auto exec_sep = [&](char const * s)
     {
+      TRACE("check sep: ", s);
       if (globalParam.delim_open == s[0] && !s[1]) {
         ast.open_group();
         args.next();
@@ -797,21 +684,18 @@ void colout_parse_cli_impl(ColoutParamAst & ast, Args args)
       args.next();
     }
 
-    // TODO default color
-
-    for (; args.is_valid(); args.next()) {
-      s = args.current();
-      if (exec_sep(s)) {
+    do {
+      if (args.is_valid() && exec_sep(args.current())) {
         break;
       }
-
       parse_colors(
         ast.colorBuilder,
         coloutParam.colors,
-        s,
+        inout(args),
         ast.palettes
       );
     }
+    while (args.is_valid());
   }
 }
 

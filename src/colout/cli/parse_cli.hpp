@@ -60,15 +60,9 @@ namespace cli {
     loop_flags = set_n_loop | loop_regex,
     lc_numeric = (1 << 9),
     use_locale = (1 << 10),
-    hidden_scale = (1 << 11),
-    scale_log = (1 << 12),
-    scale_exp = (1 << 13),
-    scale_div = (1 << 14),
     theme = (1 << 15),
     ignore_case = (1 << 16),
     end_color_mark = (1 << 17),
-    scale = (1 << 18),
-    auto_scale = (1 << 19),
     help = (1 << 20),
     color_only = (1 << 21),
     next_is_alt = (1 << 22),
@@ -155,19 +149,10 @@ namespace cli
     std::string units;
     std::string locale;
     std::string esc;
-    std::vector<Units> def_units;
     std::vector<ColorParam> colors;
     int n_loop = -1;
-    double scale_min = 0;
-    double scale_max = 100;
-    unsigned scale_match = 1;
-    unsigned unit_coeff = 1000;
     int bind_index = -1;
     int go_id = -1; // only if go_label is defined
-
-    bool has_units() {
-      return !def_units.empty() || !units.empty();
-    }
   };
 
   int parse_cli(

@@ -100,10 +100,16 @@ namespace
 }
 
 colout::PaletteRef
+colout::Palettes::get_default_palette() const
+{
+  return def_to_ref(palette_def::default_);
+}
+
+colout::PaletteRef
 colout::Palettes::get(colout::string_view sv) const
 {
   if (sv.empty()) {
-    return def_to_ref(palette_def::default_);
+    return get_default_palette();
   }
 
   for (auto & o : palettes) {

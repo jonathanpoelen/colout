@@ -37,6 +37,7 @@ SOFTWARE.
 
 #include <iostream>
 #include <string>
+#include <cstdlib>
 
 
 namespace colout {
@@ -83,6 +84,21 @@ struct CliParam
   F f;
 };
 
+template<char c>
+constexpr auto C = std::integral_constant<char, c>{};
+
+template<HasArgument hasArg = HasArgument::No, class C, class F>
+auto make_param(C c, zstring zstr, zstring help, F f)
+{
+  return CliParam<c, decltype(f), hasArg>{zstr, help, f};
+}
+
+template<HasArgument hasArg = HasArgument::No, class F>
+auto make_param(zstring zstr, zstring help, F f)
+{
+  return CliParam<'\0', decltype(f), hasArg>{zstr, help, f};
+}
+
 template<class CliOptions>
 struct ProgramOptions
 {
@@ -105,6 +121,74 @@ auto make_program_options(Params... params)
   return ProgramOptions<decltype(f())>{f()};
 }
 
+#define CLI_ERR_IF(x, msg) do { if (x) throw runtime_cli_error{msg}; } while (0)
+
+inline unsigned strtou(const char* s, char** end, int base)
+{
+  auto x = strtoul(s, end, base);
+  if (x > std::numeric_limits<unsigned>::max()) {
+    errno = ERANGE;
+    }
+  return static_cast<uint>(x);
+}
+
+inline int strtoi(const char* s, char** end, int base)
+{
+  auto x = strtol(s, end, base);
+  if (x < std::numeric_limits<unsigned>::min()) {
+    errno = ERANGE;
+    }
+  if (x > std::numeric_limits<unsigned>::max()) {
+    errno = ERANGE;
+    }
+  return static_cast<int>(x);
+}
+
+template<class T> T ston(const char* s, char** end) = delete;
+
+template<> inline int ston<int>(const char* s, char** end)
+{ return strtoi(s, end, 10); }
+
+template<> inline long ston<long>(const char* s, char** end)
+{ return strtol(s, end, 10); }
+
+template<> inline long long ston<long long>(const char* s, char** end)
+{ return strtoll(s, end, 10); }
+
+template<> inline unsigned ston<unsigned>(const char* s, char** end)
+{ return strtou(s, end, 10); }
+
+template<> inline unsigned long ston<unsigned long>(const char* s, char** end)
+{ return strtoul(s, end, 10); }
+
+template<> inline unsigned long long ston<unsigned long long>(const char* s, char** end)
+{ return strtoull(s, end, 10); }
+
+template<> inline double ston<double>(const char* s, char** end)
+{ return strtod(s, end); }
+
+template<> inline long double ston<long double>(const char* s, char** end)
+{ return strtold(s, end); }
+
+template<class T>
+void cli_set_int(T & x, char const* s)
+{
+  char* end;
+  x = ston<T>(s, &end);
+  CLI_ERR_IF(errno == ERANGE, "out of range");
+  CLI_ERR_IF(end == s || *end, "bad value");
+}
+
+template<class T>
+void cli_set_int(T & x, char const*& s, char end_c)
+{
+  char* end;
+  x = ston<T>(s, &end);
+  CLI_ERR_IF(errno == ERANGE, "out of range");
+  CLI_ERR_IF(end == s || *end != end_c, "bad value");
+  s = end+1;
+}
+
 namespace detail
 {
   namespace {
@@ -113,8 +197,6 @@ namespace detail
     };
   }
 }
-
-#define CLI_ERR_IF(x, msg) do { if (x) throw runtime_cli_error{msg}; } while (0)
 
 template<class CliOptions>
 template<class... Args>
@@ -186,6 +268,7 @@ int ProgramOptions<CliOptions>::parse_command_line(
         current_single_opt[0] = 0;
         while (*++arg) {
           current_single_opt[0] = *arg;
+          // TODO use falcon.cstmt::cswitch
           auto st = for_each_options([&](auto const & opt){
             if (opt.short_name() && opt.short_name() == *arg) {
               switch (opt.has_argument()) {
