@@ -30,7 +30,7 @@ echo -ne "Add colors to a text stream in your terminal.\n\n"\
 " -E  (eol esc-reset) Reset the normal color at end of line.\n\n"\
 " -N  (lc-numeric) Use the locale's decimal point character when parsing input data.\n\n"\
 " -p  (print) print awk/sed command.\n\n"\
-" -o  (optimize) See man awk -o/--optimize.\n\n"\
+" -o  (optimize) See man awk -O/--optimize.\n\n"\
 " -s scale  'min,max' or 'max'. Apply colors linearly between min and max (0,100 by default).\n\n"\
 " -S group_index  Use this group to compute the interval value. Implies -s.\n\n"\
 " -i group_indexes  Ignore groups (space and comma-separated list). Implies -s.\n\n"\
@@ -139,6 +139,10 @@ check_int() {
   fi
 }
 
+add_awk_opt () {
+  [ -z "$awk_opt" ] && awk_opt=' -'$1 || awk_opt+=$1
+}
+
 parse_cli () {
   line_mode=0
   scale_mode=0
@@ -172,7 +176,7 @@ parse_cli () {
       e) reset_esc_mode=1 ;;
       E) reset_esc_mode_line=1 ;;
       C) reset_normal_mode=1 ;;
-      N) awk_opt+=' -N' ;;
+      N) add_awk_opt N ;;
       c) continue_mode=1 ;;
       p) print_mode=1 ;;
       x) user_expr="$OPTARG" ;;
@@ -180,7 +184,7 @@ parse_cli () {
       f) awk_user_funcs="$OPTARG" ;;
       v) awk_user_variables="$OPTARG" ;;
       i) awk_ignore_matches+=" $OPTARG" ;;
-      o) awk_opt+=' -o' ;;
+      o) add_awk_opt O ;;
       t) exec "$(prefix_theme_path)$OPTARG" ;;
       S)
         check_int "$OPTARG" "-S"
@@ -252,8 +256,12 @@ if [ $line_mode = 1 ] ; then
   run(){
     [ -z "$pattern" ] && set_default_colors
     local cmd
-    [ $print_mode = 1 ] && cmd='echo' || cmd='exec'
-    $cmd sed "$pattern" ;
+    if [ $print_mode = 1 ]; then
+      echo '#!/bin/sh'
+      echo $cmd sed "'$pattern'"
+    else
+      exec sed "$pattern"
+    fi
   }
 else
   rgx="$1"
@@ -402,9 +410,24 @@ else
       post_awk_script='previous_len=len;len=length($0) } while (previous_len != len);'
     fi
     local cmd
-    [ $print_mode = 1 ] && cmd='echo' || cmd='exec'
+    add_awk_opt S
+    if [ $print_mode = 1 ]; then
+      cmd="print_awk"
+      echo '#!/usr/bin/awk '"$awk_opt"f
+      if [ -f /proc/$$/cmdline ]; then
+        cmdline=$(sed "s/'/'\\\\''/g;s/\\x00/' '/g" /proc/$$/cmdline)
+        cmdline=${cmdline#* }
+        echo "# ${cmdline:0:-2}"
+      fi
+      add_awk_opt o-
+      print_awk() {
+        exec awk $awk_opt "$@" </dev/null | sed 's/^\t//g'
+      }
+    else
+      cmd="exec awk $awk_opt"
+    fi
     [ $add_getdigits = 1 ] && awk_funcs+='function getdigits(s) { sub(/[^0-9]*/,"",s); return s}'
-    $cmd awk $awk_opt "$awk_funcs $awk_user_funcs"'
+    $cmd "$awk_funcs $awk_user_funcs"'
       BEGIN { '"$awk_user_variables;$awk_begin_script"' }
       { s="";'"$pre_awk_script $awk_script $post_awk_script"' print s $0 }'
   }
