@@ -392,7 +392,7 @@ namespace colout
       {
         std::size_t currentColorIdx = mResetColor ? 0u : currentLoopIdx;
 
-        auto apply_color = [&](size_t isub){
+        auto applyColor = [&](size_t isub){
           auto const new_pos = mMatch.position(isub);
           auto const len = mMatch.length(isub);
           ctx.append(begin(sv) + pos, begin(sv) + new_pos);
@@ -411,7 +411,7 @@ namespace colout
 
         if (!mReg.mark_count())
         {
-          if (!apply_color(0))
+          if (!applyColor(0))
           {
             return {false, mBCtx.nextIdFail, 0};
           }
@@ -420,7 +420,7 @@ namespace colout
         {
           for (size_t i : range(1u, mMatch.size()))
           {
-            if (!apply_color(i))
+            if (!applyColor(i))
             {
               return {false, mBCtx.nextIdFail, 0};
             }
@@ -730,7 +730,7 @@ namespace colout
       };
       ColoutParamRef param = params[i];
 
-      TRACE(i, " -> ", bctx.nextIdOk, "  ", bctx.nextIdFail     );
+      TRACE(i, " -> ", bctx.nextIdOk, "  ", bctx.nextIdFail);
 
       auto mk_maybe_loop = [&](auto t, auto mk){
         if (bool(F::loop_regex & param.activated_flags))

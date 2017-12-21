@@ -227,6 +227,7 @@ styles[] {
   {"blink",     'l', ";5"},
   {"reverse",   'v', ";7"},
   {"hidden",    'h', ";8"},
+  {"strike",    'h', ";9"},
   {"none",      'N', ";39"},
 };
 
@@ -478,10 +479,10 @@ struct ParseModeResult
 /*
  * I = integer
  * F = floating point | I
- * Mode(c, opts?) = c':'[color] | c'~' opts '~'[:][color] | c'~~'[:][color]
+ * Mode(c, opts?) = c':'[color] | c'~' opts [-h,--help] '~'[:][color] | c'~~'[:][color]
  *
  * cycle  = Mode('c', [-c,--recursive] [-n,--no-loop])
- * hash   = Mode('h', [[-p] pattern])
+ * hash   = Mode('h', [[-p] pattern]) TODO optional pattern witout -p
  * random = Mode('a', [-s,--seed I])
  * scale  = Mode('s',
  *    [-U,--units units]
@@ -494,13 +495,17 @@ struct ParseModeResult
  *    [[-s,--scale] {F|F-F}]
  * )
  *
- * parser_color = cycle | hash | random | scale
+ * TODO insert  = Mode('i', [-a text] [-b text] [-c text])
+ * TODO escaped = Mode('e')
+ * TODO replace = Mode('R', [-t|-r|-R|-T] text)
+ *  -> t, T: text replacement
+ *  -> r, R: regex replacement
+ *  -> T, R: color replacement ("[${R}\1${N}] -> "[rouge\1reset]")
  *
- * parser = [parser_color]['^'parser_color]
+ * parser_color = cycle | hash | random | scale | insert | replace | color
+ * TODO parser_color_list = parser_color ['+'parser_color]...
  *
- * TODO h~...^colors^colors
- * TODO t:$`[$&]$' NOTE replacement color $R, ${o,r}
- * TODO t^$`[$&]$'^$`[$&]$' -> T:replace:replace-for-next
+ * TODO parser = [parser_color_list]['^'parser_color_list] | '^'
  */
 ParseModeResult parse_color_mode_and_advance(InOut<Args> args)
 {

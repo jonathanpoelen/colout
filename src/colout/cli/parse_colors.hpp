@@ -145,8 +145,8 @@ namespace cli
   struct Args
   {
     Args(int ac, char const*const* av)
-   : first_(av)
-   , last_(av+ac)
+    : first_(av)
+    , last_(av+ac)
     {}
 
     char const* current() const noexcept { assert(is_valid()); return *first_; }

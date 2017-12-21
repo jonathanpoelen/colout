@@ -5,7 +5,7 @@ echo -ne "Add colors to a text stream in your terminal.\n\n"\
 "$0 -h\n"\
 "$0 -t [theme]\n"\
 "$0 -l [COLORS_AND_STYLES...]\n"\
-"$0 [-rcankRCeNpo] [-s scale] [-S group_index] [-i group_indexes] [-I group_index] [-u units] [-x awk_expr] [-X awk_expr] [-f awk_func] PATTERN [COLORS_AND_STYLES...] [-- ...]\n\n"\
+"$0 [-rcankRCeENpo] [-s scale] [-S group_index] [-i group_indexes] [-I group_index] [-u units] [-x awk_expr] [-X awk_expr] [-f awk_func] [-v awk_variable] PATTERN [COLORS_AND_STYLES...] [-- ...]\n\n"\
 "PATTERN\n  Regular expression.\n\n"\
 "COLORS_AND_STYLES\n"\
 "  - A style name\n"\
@@ -108,21 +108,21 @@ echo -ne "Add colors to a text stream in your terminal.\n\n"\
   "  [r:]br2\n\n"\
 " rgb888 color:\n   Decimal triplet: [0-9]+/[0-9]+/[0-9]+ (ex: '123/213/42')\n\n"\
 " rgb888 color:\n   Hexadecimal triplet: #[0-9a-fA-F]{6} (ex: '#22fa44')\n\n"\
-" rgb444 color:\n   Hexadecimal triplet: #[0-9a-fA-F]{3}, (ex: '#ae3')\n\n"\
+" rgb444 color:\n   Hexadecimal triplet: #[0-9a-fA-F]{3} (ex: '#ae3')\n\n"\
 " 256 colors:\n   A number in [0…255]\n\n"\
 " ANSI/Escape color:\n   'e' followed by a number in [0…15] (ex: e3)\n\n"\
-" background prefix:\n   bg=\n\n"\
+" background prefix:\n   'bg=' followed by a color.\n\n"\
 " example:\n"\
   "  echo abcdefgh | $0 '(..)..(..)' red,bg=#8f10e5,italic bg=yellow,k\n"\
-  "  ls -shS ~/Videos | ./colout -Nu KMG -x 'log(v*(1024**(u-1)))*2*n/MAX-n' -v 'MAX=log(15000000)' '[0-9]+\.?,?[0-9]*.' rainbow2\n"\
+  "  ls -shS ~/Videos | $0 -Nu KMG -x 'log(v*(1024**(u-1)))*2*n/MAX-n' -v 'MAX=log(15000000)' '[0-9]+\.?,?[0-9]*.' rainbow2\n"\
   "  ls -shS ~/Videos | $0 -Ns 1000 -u KMG '[0-9]+\.?,?[0-9]*.' rainbow\n"\
   "  ls -l | $0 '(.)(.)(.)(.)(.)(.)(.)(.)(.)(.)' B {r,g,y},{,i,o}\n"\
-  "  echo \$LS_COLORS | $0 -r '([^=]+)=([^:]+:)'\n"\
+  "  echo \$LS_COLORS | $0 -r '([^=]+)=([^:]+):'\n"\
   "  echo \$PATH | $0 -rn '([^:]+):'\n"\
-  "  env | ./colout '^([^=]+)=([^:]+)$|^([^=]+)=' y g y -- -cr '^([^=]+)=([^:]+):?' -- -c '.*' b\n"\
-  "  echo 'Progress [########################] 100%' | $0 -rn '#' hidden,bg=Rainbow\n"\
+  "  env | $0 '^([^=]+)=' y -- -cr '^([^=]+)=([^:]+):?' -- -cr '^([^:]+)(:)' b bg=Y -- -c '/.*' b -- -c '.*' g\n"\
+  "  echo 'Progress [########################] 100%' | $0 -rn '#' hidden,bg=Rainbow2\n"\
   "  ls -l | $0 -t perm\n"\
-  "  echo ' ab \"abc\\\\\\\tde\\\\\\\"fg\\\\\\\"\"hi' | colout -aC '\"' r,o -- -cr '\\\\\.' y,o -- -ec '\"' r\n"
+  "  echo ' ab \"abc\\\\\\\tde\\\\\\\"fg\\\\\\\"\"hi' | $0 -aC '\"' r,o -- -cr '\\\\\.' y,o -- -ec '\"' r,o\n"
 }
 
 prefix_theme_path() {
@@ -590,8 +590,7 @@ while [ $# != 0 ] ; do
 
   # note: "bg,red" is equivalent to "bg=red"
   if [[ "$1" =~ ^'+' ]]; then
-    current_color="${1:1}"
-    IFS=$',= ' read -a styles <<<$current_color
+    IFS=$',= ' read -a styles <<<${1:1}
   else
     IFS=$',= ' read -a styles <<<$1
   fi
