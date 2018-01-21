@@ -377,7 +377,7 @@ else
       if (n == 1) {
         i = 0
         '"$awk_ic_var1"'
-        s = s substr($0, 0, RSTART-1) '"$a_i_color""$esc_eol"'
+        s = s substr($0, 0, RSTART-1) '"$a_i_color"'
       }
       else {
         p = 1
