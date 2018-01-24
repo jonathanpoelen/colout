@@ -7,7 +7,7 @@ Inspired by http://nojhan.github.com/colout/
 This repo contents 2 versions of colout:
 
 - A bash script (`colout`) and themes (`colout_*`).
-- A more flexible but unfinished C++ version.
+- A more flexible but unfinished C++ version (other branch).
 
 The following is only about the bash script.
 
