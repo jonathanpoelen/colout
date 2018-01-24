@@ -1,0 +1,13 @@
+text pattern:
+  contains:
+  prefix: ^...
+  suffix: ...$
+  (ex: --prefix error r / --prefix warning y )
+  (ex: --suffix ok g / --suffix fail r )
+auto detect text pattern (not contains {[\(?+*) (optimizer)
+
+more global option (--g-*): `--g-regex-type pcre pat1 colors , pat2 colors` intead of `--regex-type pcre pat1 colors , --regex-type pcre pat2 colors`
+
+--utf8: utf8 pattern
+
+optional label `?name` as color
