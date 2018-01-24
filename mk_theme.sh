@@ -1,20 +1,11 @@
 #!/bin/zsh
 
+if [ -z "$1" ]; then
+  echo $0 theme_name colout_param... >&2
+  exit 1
+fi
+
 t="$1"
 shift
-
-{
-echo '#!/usr/bin/awk -f'
-echo -n '\n# ./mk_theme.sh '"$t"' \\\n#'
-for p in "$@" ; do
-  [ $p = -- ] \
-  && echo -n ' -- \\\n#' \
-  || echo -n " '${p//'/'\\''}'"
-done
-echo "\n"
-}> colout_"$t"
-
-./colout -o "$@" <<<''
-sed 's/^.//' *.out >> colout_"$t"
+./colout -po "$@" >> colout_"$t"
 chmod u+x -- colout_"$t"
-rm *.out
