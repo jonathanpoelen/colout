@@ -176,11 +176,11 @@ A number in [0…255]
 - `ls -shS ~/Videos | ./colout -Ns 1000 -u KMG '[0-9]+\.?,?[0-9]*.' rainbow`
 - `ls -l | ./colout '(.)(.)(.)(.)(.)(.)(.)(.)(.)(.)' B {r,g,y},{,i,o}`
 - `echo $LS_COLORS | ./colout -r '([^=]+)=([^:]+:)'`
-- `echo $PATH | ./colout -rn '([^:]+):'`
+- `echo $PATH | ./colout -rn '([^:]+):?'`
 - `env | ./colout '^([^=]+)=([^:]+)$|^([^=]+)=' y g y -- -cr '^([^=]+)=([^:]+):?' -- -c '.*' b`
 - `echo 'Progress [########################] 100%' | ./colout -rn '#' hidden,bg=Rainbow2`
 - `ls -l | ./colout -t perm`
-- `echo ' ab "abc\\tde\\"fg\\""hi' | colout -aC '"' r,o -- -cr '\\.' y,o -- -ec '"' r`
+- `echo ' ab "abc\\tde\\"fg\\""hi' | ./colout -aC '"' r,o -- -cr '\\.' y,o -- -ec '"' r`
 
 
 <!-- links -->
