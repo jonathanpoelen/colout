@@ -251,7 +251,8 @@ if [ $line_mode = 1 ] ; then
   pattern=''
   append(){
     [ ! -z "$pattern" ] && pattern+=';n;'
-    pattern+="s/^/\x1b[${1}m/;s/$/\x1b[0m/"
+    pattern+="s/^/\x1b[${1}m/"
+    [ ! -z "$esc_reset" ] && pattern+=";s/$/\x1b[0m/"
   }
   run(){
     [ -z "$pattern" ] && set_default_colors
