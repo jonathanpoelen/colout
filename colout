@@ -311,7 +311,7 @@ else
       rep_start+='c="'$s'"'$set_normal
       local a_i_color='"\x1B[" c "m" a[i]'$esc_reset
     else
-      local a_i_color='c=colors'$icreg'['
+      local a_i_color='colors'$icreg'['
       if [ ! -z "$user_expr" ] ; then
         local uexpr='{r=int('"$user_expr"')
           return r<0?0:(r>=nb_colors'$icreg'?nb_colors'$icreg'-1:r)}'
@@ -352,9 +352,15 @@ else
         awk_ic_var1='ic=0;'
         awk_ic_var2='ic=i-1;'
       fi
-      awk_ic_var1+=$a_i_color\]$set_normal
-      awk_ic_var2+=$a_i_color\]$set_normal
-      a_i_color='"\x1B[" c "m" a[i]'$esc_reset
+
+      if [ -z "$set_normal" ]; then
+        a_i_color='"\x1B[" '$a_i_color\]$set_normal' "m" a[i]'$esc_reset
+      else
+        awk_ic_var1+='c='$a_i_color\]$set_normal
+        awk_ic_var2+='c='$a_i_color\]$set_normal
+        a_i_color='"\x1B[" c "m" a[i]'$esc_reset
+      fi
+
       if [ $keep_color != 1 ] || [ $ireg = 0 ] ; then
         awk_begin_script+="$colors"' nb_colors'$icreg'='$icol';'
       fi
@@ -417,8 +423,9 @@ else
       echo '#!/usr/bin/awk '"$awk_opt"f
       if [ -f /proc/$$/cmdline ]; then
         cmdline=$(sed "s/'/'\\\\''/g;s/\\x00/' '/g" /proc/$$/cmdline)
-        cmdline=${cmdline#* }
-        echo "# ${cmdline:0:-2}"
+        cmdline=${cmdline#* } # remove shell path
+        cmdline=${cmdline#* } # remove colout path
+        echo "# colout ${cmdline:0:-2}"
       fi
       add_awk_opt o-
       print_awk() {
