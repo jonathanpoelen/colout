@@ -1,4 +1,4 @@
-[![version.badge]](http://semver.org) [![travis.badge]][travis.url] [![appveyor.badge]][appveyor.url]
+<!-- [![version.badge]](http://semver.org) -->
 
 # Colout -- Add colors to a text stream in your terminal
 
@@ -25,9 +25,10 @@ The following is only about the bash script.
 ## Installation
 
 ```bash
-cp colout colout_* ~/bin
+ln -s colout ~/bin
 ```
 
+`~/bin` must be in your `PATH` variable.
 
 ## Dependencies
 
@@ -47,6 +48,7 @@ cp colout colout_* ~/bin
 - `-R`:  (no-reset) Do not reset colors.
 - `-C`:  (color-continue) The current color becomes the normal color.
 - `-e`:  (esc-reset) Reset the normal color.
+- `-E`:  (eol esc-reset) Reset the normal color at end of line.
 - `-N`:  (lc-numeric) Use the locale's decimal point character when parsing input data.
 - `-p`:  (print) print awk/sed command.
 - `-o`:  (optimize) See man awk `-o`/`--optimize`.
@@ -69,7 +71,7 @@ cp colout colout_* ~/bin
 
 ## PATTERN
 
-  Regular expression.
+  Awk pattern expression.
 
 
 ## COLORS_AND_STYLES
@@ -77,10 +79,12 @@ cp colout colout_* ~/bin
 - A style name
 - A color name
 - A colormap name
-- A number in [0…255]
-- `e` followed by a number in [0…15]
+- A number from 0 to 255
+- A triplet from 0 and 255 separated by `/`
+- `e` followed by a number from 0 to 15
 - `#` followed by 3 or 6 hexadecimal values
 - `bg`
+- '+' followed by a style
 - Or a comma-separated list (or `=`) of those values.
 
 ### Styles
@@ -93,6 +97,15 @@ cp colout colout_* ~/bin
 - `blink`,`l`
 - `reverse`,`v`
 - `h[idden]`
+
+- `reset`,`rr`
+- `r[eset_]bold`,`ro`
+- `r[eset_]d[im]`
+- `r[eset_]i[talic]`
+- `r[eset_]u[nderline]`
+- `r[eset_]blink`,`rl`
+- `r[eset_]inverse`,`rv`
+- `r[eset_]h[idden]`
 
 ### Named colors
 
@@ -144,25 +157,23 @@ An uppercase character is considered to be bold.
 - `[r:]br`
 - `[r:]br2`
 
-### rgb888 color
+### rgb888 color (TrueColor)
 
-Decimal triplet: `[0-9]+/[0-9]+/[0-9]+` (ex: `123/213/42`).
-
-### rgb888 color
+Decimal triplet from 0 to 255: `[0-9]{1,3}/[0-9]{1,3}/[0-9]{1,3}` (ex: `123/213/42`).
 
 Hexadecimal triplet: `#[0-9a-fA-F]{6}` (ex: `#22fa44`).
 
-### rgb444 color
+### rgb444 color (TrueColor)
 
 Hexadecimal triplet: `#[0-9a-fA-F]{3}` (ex: `#ae3`).
 
 ### 256 colors
 
-A number in [0…255]
+A number from 0 to 255.
 
 ### ANSI/Escape color
 
-`e` followed by a number in [0…15] (ex: `e3`).
+`e` followed by a number from 0 to 15 (ex: `e3`).
 
 ### background prefix
 
@@ -184,10 +195,4 @@ A number in [0…255]
 
 
 <!-- links -->
-[version.badge]: https://badge.fury.io/gh/jonathanpoelen%2Fcolout.svg
-
-[travis.url]: https://travis-ci.org/jonathanpoelen/colout
-[travis.badge]: https://travis-ci.org/jonathanpoelen/colout.svg?branch=master
-
-[appveyor.url]: https://ci.appveyor.com/project/jonathanpoelen/colout
-[appveyor.badge]: https://ci.appveyor.com/api/projects/status/github/jonathanpoelen/colout
+<!-- [version.badge]: https://badge.fury.io/gh/jonathanpoelen%2Fcolout.svg -->
