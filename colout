@@ -75,7 +75,7 @@ echo -ne "Add colors to a text stream in your terminal.\n\n"\
   "  r[eset_]inverse,rv\n"\
   "  r[eset_]h[idden]\n\n"\
 " named colors (Note: an uppercase character is considered to be bold)\n"\
-  "  default,none\n"\
+  "  none\n"\
   "  [blac]k\n"\
   "  w[hite]\n"\
   "  r[ed]\n"\
@@ -478,7 +478,7 @@ declare -A style_names=(
 
   # foreground
 
-  [fgdefault]=39 [fgnone]=39
+  [fgnone]=39
 
   [fgblack]=30 [fgred]=31 [fggreen]=32 [fgyellow]=33 [fgblue]=34 [fgmagenta]=35 [fgcyan]=36 [fggray]=37
   [fgk]=30 [fgr]=31 [fgg]=32 [fgy]=33 [fgb]=34 [fgm]=35 [fgc]=36 [fga]=37
@@ -487,7 +487,7 @@ declare -A style_names=(
   [fgdgray]=90 [fglred]=91 [fglgreen]=92 [fglyellow]=93 [fglblue]=94 [fglmagenta]=95 [fglcyan]=96
   [fgda]=90 [fglr]=91 [fglg]=92 [fgly]=93 [fglb]=94 [fglm]=95 [fglc]=96 [fgw]=97
 
-  [fgbgdefault]=39 [fgbgnone]=39
+  [fgbgnone]=39
 
   [fgbgblack]=30 [fgbgred]=31 [fgbggreen]=32 [fgbgyellow]=33 [fgbgblue]=34 [fgbgmagenta]=35 [fgbgcyan]=36 [fgbggray]=37
   [fgbgk]=30 [fgbgr]=31 [fgbgg]=32 [fgbgy]=33 [fgbgb]=34 [fgbgm]=35 [fgbgc]=36 [fgbga]=37
@@ -502,7 +502,7 @@ declare -A style_names=(
 
   # background
 
-  [bgdefault]=49 [bgnone]=49
+  [bgnone]=49
 
   [bgblack]=40 [bgred]=41 [bggreen]=42 [bgyellow]=43 [bgblue]=44 [bgmagenta]=45 [bgcyan]=46 [bggray]=47
   [bgk]=40 [bgr]=41 [bgg]=42 [bgy]=43 [bgb]=44 [bgm]=45 [bgc]=46 [bga]=47
@@ -511,7 +511,7 @@ declare -A style_names=(
   [bgdark_gray]=100 [bglight_red]=101 [bglight_green]=102 [bglight_yellow]=103 [bglight_blue]=104 [bglight_magenta]=105 [bglight_cyan]=106 [bgwhite]=107
   [bgda]=100 [bglr]=101 [bglg]=102 [bgly]=103 [bglb]=104 [bglm]=105 [bglc]=106 [bgw]=107
 
-  [bgbgdefault]=49 [bgbgnone]=49
+  [bgbgnone]=49
 
   [bgbgblack]=40 [bgbgred]=41 [bgbggreen]=42 [bgbgyellow]=43 [bgbgblue]=44 [bgbgmagenta]=45 [bgbgcyan]=46 [bgbggray]=47
   [bgbgk]=40 [bgbgr]=41 [bgbgg]=42 [bgbgy]=43 [bgbgb]=44 [bgbgm]=45 [bgbgc]=46 [bgbga]=47
@@ -548,8 +548,8 @@ declare -A colormap_cmds=(
   [navy]='append_colors_rgb 235;247;249 187;229;254 160;211;219 123;193;204 85;175;189 48;157;174'
   [br]='append_colors_rgb 63;127;147 129;167;181 184;209;217 242;242;242 232;192;181 213;138;118 194;85;57'
   [br2]='append_colors_rgb 41;113;177 107;172;208 194;221;255 247;246;246 250;204;180 228;128;101 185;39;50'
-  [default]='append_colors 31 32 33 34 35 36 37'
-  [Default]='append_colors 31 32 33 34 35 36 37'
+  [default]='append_colors_id 31 32 33 34 35 36 37'
+  [Default]='append_colors_id 31 32 33 34 35 36 37'
 )
 
 cmd='38'
@@ -580,9 +580,20 @@ append_colors_rgb() {
   append_colors "$@"
   cmd=${cmd:0:-2}
 }
+append_colors_id() {
+  local oldcmd=$cmd
+  cmd=''
+  append_colors "$@"
+  cmd=$oldcmd
+}
 set_default_colors() {
-  append_colors {31..37}
-  append "$s"
+  append "31"
+  append "32"
+  append "33"
+  append "34"
+  append "35"
+  append "36"
+  append "37"
 }
 invalid_style() {
   [ ! -z "${style_names[fg$style]}" ] &&
