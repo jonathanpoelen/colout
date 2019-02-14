@@ -69,8 +69,7 @@ ln -s colout ~/bin
   - `v`: the extracted digit value
   - `n`: the number of color
   - `u`: (only if `-u`) the unit position (`1` is first unit, `0` is an unrecognized unit).
-
- -Y awk_expr  An expression that returns a numeric value between min and max (see `-s scale`). Equivalent to `-X 'getdigits(awk_expr)'`
+- `-Y awk_expr`:  An expression that returns a numeric value between min and max (see `-s scale`). Equivalent to `-X 'getdigits(awk_expr)'`
   - `v`: the extracted digit value
   - `n`: the number of color
   - `u`: (only if `-u`) the unit position (`1` is first unit, `0` is an unrecognized unit).
@@ -106,7 +105,6 @@ ln -s colout ~/bin
 - `blink`,`l`
 - `reverse`,`v`
 - `h[idden]`
-
 - `reset`,`rr`
 - `r[eset_]bold`,`ro`
 - `r[eset_]d[im]`
