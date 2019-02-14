@@ -19,7 +19,7 @@ The following is only about the bash script.
 
 `colout` -l [COLORS_AND_STYLES...]
 
-`colout` [-rcankRCeNpo] [-s scale] [-S group_index] [-i group_indexes] [-I group_index] [-u units] [-x awk_expr] [-X awk_expr] [-f awk_func] PATTERN [COLORS_AND_STYLES...] [-- ...]
+`colout` [-rcankRCeENpo] [-s scale] [-S group_index] [-i group_indexes] [-I group_index] [-u units] [-x awk_expr] [-X awk_expr] [-y awk_expr] [-Y awk_expr] [-f awk_func] [-v awk_variable] PATTERN [COLORS_AND_STYLES...] [-- ...]
 
 
 ## Installation
@@ -65,6 +65,15 @@ ln -s colout ~/bin
   - `v`: the extracted value
   - `n`: the number of color
   - `u`: (only if `-u`) the unit position (`1` is first unit, `0` is an unrecognized unit).
+- `-y awk_expr`:  An expression that returns the color index. Equivalent to `-x 'getdigits(awk_expr)'`
+  - `v`: the extracted digit value
+  - `n`: the number of color
+  - `u`: (only if `-u`) the unit position (`1` is first unit, `0` is an unrecognized unit).
+
+ -Y awk_expr  An expression that returns a numeric value between min and max (see `-s scale`). Equivalent to `-X 'getdigits(awk_expr)'`
+  - `v`: the extracted digit value
+  - `n`: the number of color
+  - `u`: (only if `-u`) the unit position (`1` is first unit, `0` is an unrecognized unit).
 - `-f awk_script`:  Awk user functions.
 - `-v awk_script`:  Awk user variables.
 
@@ -84,7 +93,7 @@ ln -s colout ~/bin
 - `e` followed by a number from 0 to 15
 - `#` followed by 3 or 6 hexadecimal values
 - `bg`
-- '+' followed by a style
+- `+` followed by a style
 - Or a comma-separated list (or `=`) of those values.
 
 ### Styles
@@ -131,7 +140,7 @@ An uppercase character is considered to be bold.
 
 ### Colormap
 
-(`r:` reverse order)
+`r:` for reverse order.
 
 - `[r:]default`,`Default`
 - `[r:]rainbow`
@@ -183,15 +192,15 @@ A number from 0 to 255.
 ## Example:
 
 - `echo abcdefgh | ./colout '(..)..(..)' red,bg=#8f10e5,italic bg=yellow,k`
-- `ls -shS ~/Videos | ./colout -Nu KMG -x 'log(v*(1024**(u-1)))*2*n/MAX-n' -v 'MAX=log(15000000)' '[0-9]+\.?,?[0-9]*.' rainbow2`
+- `ls -shS ~/Videos | ./colout -Nu KMG -y 'log(v*(1024**(u-1)))*2*n/MAX-n' -v 'MAX=log(15000000)' '[0-9]+\.?,?[0-9]*.' rainbow2`
 - `ls -shS ~/Videos | ./colout -Ns 1000 -u KMG '[0-9]+\.?,?[0-9]*.' rainbow`
 - `ls -l | ./colout '(.)(.)(.)(.)(.)(.)(.)(.)(.)(.)' B {r,g,y},{,i,o}`
-- `echo $LS_COLORS | ./colout -r '([^=]+)=([^:]+:)'`
-- `echo $PATH | ./colout -rn '([^:]+):?'`
-- `env | ./colout '^([^=]+)=([^:]+)$|^([^=]+)=' y g y -- -cr '^([^=]+)=([^:]+):?' -- -c '.*' b`
+- `ls -l | colout -t perm`
+- `echo $LS_COLORS | ./colout -r '([^=]+)=([^:]+):?'`
+- `echo $PATH | ./colout -rn '([^:]+):'`
+- `env | ./colout '^([^=]+)=' y -- -cr '^([^=]+)=([^:]+):?' -- -cr '^([^:]+)(:)' b bg=Y -- -c '/.*' b -- -c '.*' g`
 - `echo 'Progress [########################] 100%' | ./colout -rn '#' hidden,bg=Rainbow2`
-- `ls -l | ./colout -t perm`
-- `echo ' ab "abc\\tde\\"fg\\""hi' | ./colout -aC '"' r,o -- -cr '\\.' y,o -- -ec '"' r`
+- `echo ' ab "abc\\tde\\"fg\\""hi' | ./colout -aC '"' r,o -- -cr '\\.' y,o -- -ec '"' r,o`
 
 
 <!-- links -->

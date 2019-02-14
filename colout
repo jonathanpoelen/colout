@@ -134,7 +134,6 @@ echo -ne "Add colors to a text stream in your terminal.\n\n"\
   "  echo \$PATH | colout -rn '([^:]+):'\n"\
   "  env | colout '^([^=]+)=' y -- -cr '^([^=]+)=([^:]+):?' -- -cr '^([^:]+)(:)' b bg=Y -- -c '/.*' b -- -c '.*' g\n"\
   "  echo 'Progress [########################] 100%' | colout -rn '#' hidden,bg=Rainbow2\n"\
-  "  ls -l | colout -t perm\n"\
   "  echo ' ab \"abc\\\\\\\tde\\\\\\\"fg\\\\\\\"\"hi' | colout -aC '\"' r,o -- -cr '\\\\\.' y,o -- -ec '\"' r,o\n"
 }
 
