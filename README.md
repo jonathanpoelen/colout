@@ -111,7 +111,7 @@ ln -s colout ~/bin
 - `r[eset_]i[talic]`
 - `r[eset_]u[nderline]`
 - `r[eset_]blink`,`rl`
-- `r[eset_]inverse`,`rv`
+- `r[eset_]reverse`,`rv`
 - `r[eset_]h[idden]`
 
 ### Named colors
