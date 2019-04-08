@@ -19,7 +19,7 @@ The following is only about the bash script.
 
 `colout` -l [COLORS_AND_STYLES...]
 
-`colout` [-rcankRCeENpo] [-s scale] [-S group_index] [-i group_indexes] [-I group_index] [-u units] [-x awk_expr] [-X awk_expr] [-y awk_expr] [-Y awk_expr] [-f awk_func] [-v awk_variable] PATTERN [COLORS_AND_STYLES...] [-- ...]
+`colout` [-rcankRCeENpo] [-i group_indexes] [-s scale] [-S group_index] [-I group_index] [-u units] [-x awk_expr] [-X awk_expr] [-y awk_expr] [-Y awk_expr] [-f awk_func] [-v awk_variable] PATTERN [COLORS_AND_STYLES...] [-- ...]
 
 
 ## Installation
@@ -52,9 +52,9 @@ ln -s colout ~/bin
 - `-N`:  (lc-numeric) Use the locale's decimal point character when parsing input data.
 - `-p`:  (print) print awk/sed command.
 - `-o`:  (optimize) See man awk `-o`/`--optimize`.
+- `-i group_indexes`:  Ignore groups (space and comma-separated list).
 - `-s scale`:  'min,max' or 'max'. Apply colors linearly between min and max (0,100 by default).
 - `-S group_index`:  Use this group to compute the interval value. Implies `-s`.
-- `-i group_indexes`:  Ignore groups (space and comma-separated list). Implies `-s`.
 - `-I group_index`:  Shortcut for `-S group_index -i group_index`. Implies `-s`.
 - `-u units`:  Cuts the color range per unit. Implies `-s`.
 - `-x awk_expr`:  An expression that returns the color index.
