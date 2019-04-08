@@ -7,5 +7,5 @@ fi
 
 t="$1"
 shift
-./colout -po "$@" >> colout_"$t"
+./colout -po "$@" > colout_"$t"
 chmod u+x -- colout_"$t"

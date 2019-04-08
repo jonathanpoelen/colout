@@ -441,6 +441,7 @@ else
         cmdline=${cmdline#* } # remove shell path
         cmdline=${cmdline#* } # remove colout path
         echo "# colout ${cmdline:0:-2}"
+        echo -e "\n# created $(date +'%a %b %d %T %Y')\n"
       fi
       add_awk_opt o-
       print_awk() {
