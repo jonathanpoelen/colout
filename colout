@@ -464,8 +464,10 @@ declare -A style_names=(
   [fgnormal]=0 [fgbold]=1 [fgdim]=2 [fgitalic]=3 [fgunderline]=4 [fgblink]=5 [fgreverse]=7 [fghidden]=8
   [fgn]=0 [fgo]=1 [fgd]=2 [fgi]=3 [fgu]=4 [fgl]=5 [fgv]=7 [fgh]=8
 
-  [fgreset]='21;22;23;24;25;26;27;28' [fgreset_bold]=21 [fgreset_dim]=22 [fgreset_italic]=23 [fgreset_underline]=24 [fgreset_blink]=25 [fgreset_reverse]=27 [fgreset_hidden]=28
-  [fgrr]='21;22;23;24;25;26;27;28' [fgro]=21 [fgrd]=22 [fgri]=23 [fgru]=24 [fgrl]=25 [fgrv]=27 [fgrh]=28
+  # 21: Doubly underlined; or: not bold
+  # 22: Neither bold nor faint
+  [fgreset]='22;23;24;25;26;27;28' [fgreset_bold]=21 [fgreset_dim]=22 [fgreset_italic]=23 [fgreset_underline]=24 [fgreset_blink]=25 [fgreset_reverse]=27 [fgreset_hidden]=28
+  [fgrr]='22;23;24;25;26;27;28' [fgro]=21 [fgrd]=22 [fgri]=23 [fgru]=24 [fgrl]=25 [fgrv]=27 [fgrh]=28
   [fgreset_bold]=21 [fgrdim]=22 [fgritalic]=23 [fgrunderline]=24 [fgrblink]=25 [fgrreverse]=27 [fgrhidden]=28
 
   # [bgnormal]=0 [bgbold]=1 [bgdim]=2 [bgitalic]=3 [bgunderline]=4 [bgblink]=5 [bgreverse]=7 [bghidden]=8
