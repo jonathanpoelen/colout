@@ -1,4 +1,4 @@
-#!/usr/bin/awk  -OSf
+#!/usr/bin/gawk  -OSf
 # colout '-po' '^\s*[0-9]+/[0-9]+ Test\s+#[0-9]+: (.*)\s+\.+\s+(Passed)' 'G' '--' '^\s*[0-9]+/[0-9]+ Test\s+#[0-9]+: (.*)\s+\.+(\*{3}.*)\s+.*' 'R'
 
 # created Mon Apr 08 03:19:32 2019

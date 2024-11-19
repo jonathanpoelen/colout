@@ -1,4 +1,4 @@
-#!/usr/bin/awk  -OSf
+#!/usr/bin/gawk  -OSf
 # colout '-po' '^(checking .*)(yes|found|ok)$' 'g' 'G' '--' '^(checking .*)(no|none)$' 'y' 'Y' '--' '^(configure:) (error:)(.*)' 'r' 'R' '--' '^(configure:)(.*)' 'm' 'M' '--' '^(checking .*)' 'b' '--' '^(config.status:) (creating )(.*)' 'c' 'b' 'B' '--' '^(config.status:) (executing )(.*)' 'c' 'g' 'G'
 
 # created Mon Apr 08 03:19:32 2019

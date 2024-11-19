@@ -1,4 +1,4 @@
-#!/usr/bin/awk  -OSf
+#!/usr/bin/gawk  -OSf
 # colout '-po' '([-bcCdDlMmpPs?])([-r])([-w])([-xsS])([-r])([-w])([-xsS])([-r])([-w])([-xtT])' 'b' 'g,' 'g,i' 'g,o' 'y,' 'y,i' 'y,o' 'r,' 'r,i' 'r,o'
 
 # created Mon Apr 08 03:19:32 2019

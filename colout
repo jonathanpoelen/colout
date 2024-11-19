@@ -435,7 +435,7 @@ else
     add_awk_opt S
     if [ $print_mode = 1 ]; then
       cmd="print_awk"
-      echo '#!/usr/bin/awk '"$awk_opt"f
+      echo '#!/usr/bin/gawk '"$awk_opt"f
       if [ -f /proc/$$/cmdline ]; then
         cmdline=$(sed "s/'/'\\\\''/g;s/\\x00/' '/g" /proc/$$/cmdline)
         cmdline=${cmdline#* } # remove shell path

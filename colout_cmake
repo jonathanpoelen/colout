@@ -1,4 +1,4 @@
-#!/usr/bin/awk  -OSf
+#!/usr/bin/gawk  -OSf
 # colout '-po' '^--.*works|^--.*done|^-- Found.*' 'g' '--' '^-- Found.*NO|^--.*broken|^-- Coult NOT find.*|^-- Configuring incomplete, errors occurred!' 'r' '--' '^--.*' 'c' '--' 'CMake Error:' 'r' '--' 'CMake Warning' 'y' '--' '^(Scanning dependencies of target)(.*)$' 'c' 'C' '--' '^(Linking .* )(library|executable) (.*/)*(.+(\.[aso]+)*)$' 'b' 'b' 'B' '--' 'make\[[0-9]+\].*' 'y' '--' '(make: \*\*\* \[.+\] )(.* [0-9]+)' 'r' 'R' '--' '-s' '100' '^(\[\s*[0-9]+%\])' 'Rainbow2' '--' '-c' '^\s(.*Creating.*)$' 'c' '--' '^\s(Built target)(\s.*)$' 'g' 'G' '--' '^\s(Building \w* object)\s+(.*)(\.dir)(.*/)([-]+|\w+).c.*.o$' 'c' 'c' 'c' 'b' 'C' '--' '^\s(Generating)(\s+.*)$' 'c' 'C'
 
 # created Mon Apr 08 03:19:32 2019

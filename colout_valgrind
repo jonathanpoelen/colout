@@ -1,4 +1,4 @@
-#!/usr/bin/awk  -OSf
+#!/usr/bin/gawk  -OSf
 # colout '-po' '^(==[0-9]+==\s{1})(Memcheck|Copyright|Using|Rerun|Use --)(.*)$' 'b' '--' '^(==[0-9]+==\s{1})(Warning)(.*)$' 'm' '--' '^(==[0-9]+==\s{1}Command: )(\S*).*$' 'g' 'W' '--' '^(==[0-9]+==\s{1})(HEAP SUMMARY:|All heap blocks were freed)(.*)$' 'g' '--' '^(==[0-9]+==\s{1}\S+.*)$' 'r' '--' '^==[0-9]+==\s{2}(\S+.*)$' 'y' '--' '^==[0-9]+==\s{4}([atby]{2}) (0x0): (\?{3})' 'b' 'y' 'R' '--' '^==[0-9]+==\s{4}([atby]{2}) (0x)([^:]*:) \S+' 'b' '--' '\(in (.*)\)' 'c' '--' '^==[0-9]+==\s{4}(definitely lost): .* (in) .*' 'R' '--' '^==[0-9]+==\s{4}(indirectly lost): .* (in) .*' 'Y' '--' '^==[0-9]+==\s{6}(possibly lost): .* (in) .*' 'Y' '--' '^==[0-9]+==\s{4}(still reachable): .* (in) .*' 'G' '--' '^==[0-9]+==\s{9}(suppressed): .* (in) .*' 'C' '--' '-c' ' \(([^()\.]*\.[^:]+):([0-9]+)\)$' 'W' 'y'
 
 # created ven. mai 10 10:39:12 2019
