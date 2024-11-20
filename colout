@@ -152,7 +152,7 @@ check_int() {
 }
 
 add_awk_opt () {
-  [ -z "$awk_opt" ] && awk_opt=' -'$1 || awk_opt+=$1
+  [[ -z "$awk_opt" ]] && awk_opt=' -'$1 || awk_opt+=$1
 }
 
 parse_cli () {
@@ -214,7 +214,7 @@ parse_cli () {
         ;;
       s)
         IFS=$',= ' read min_scale max_scale <<<$OPTARG
-        if [ -z "$max_scale" ] ; then
+        if [[ -z "$max_scale" ]] ; then
           max_scale="$min_scale"
           min_scale=0
         fi
@@ -231,7 +231,7 @@ parse_cli () {
       u) units="$OPTARG" ; scale_mode=1 ;;
       \?) break ;;
       :)
-        if [ $OPTARG = t ] ; then
+        if [[ $OPTARG = t ]] ; then
           local prefix=$(prefix_theme_path)
           local len=${#prefix}
           for f in "$prefix"* ; do
@@ -247,7 +247,7 @@ parse_cli () {
     esac
   done
 
-  if [ $keep_color = 0 ] ; then
+  if [[ $keep_color = 0 ]] ; then
     colors=''
     ((++icreg))
   fi
@@ -256,23 +256,23 @@ parse_cli () {
 parse_cli "$@"
 shift $(($OPTIND-1))
 
-#if [ $# = 0 ] && [ $line_mode = 0 ] && [ $scale_mode = 0 ] ; then
-if [ $# = 0 ] && [ $line_mode = 0 ] ; then
+#if (( $# == 0 )) && [[ $line_mode = 0 ]] && [[ $scale_mode = 0 ]] ; then
+if (( $# == 0 )) && [[ $line_mode = 0 ]] ; then
   usage >&2
   exit 1
 fi
 
-if [ $line_mode = 1 ] ; then
+if [[ $line_mode = 1 ]] ; then
   pattern=''
   append(){
-    [ ! -z "$pattern" ] && pattern+=';n;'
+    [[ ! -z "$pattern" ]] && pattern+=';n;'
     pattern+="s/^/\x1b[${1}m/"
-    [ ! -z "$esc_reset" ] && pattern+=";s/$/\x1b[0m/"
+    [[ ! -z "$esc_reset" ]] && pattern+=";s/$/\x1b[0m/"
   }
   run(){
-    [ -z "$pattern" ] && set_default_colors
+    [[ -z "$pattern" ]] && set_default_colors
     local cmd
-    if [ $print_mode = 1 ]; then
+    if [[ $print_mode = 1 ]]; then
       echo '#!/bin/sh'
       echo $cmd sed "'$pattern'"
     else
@@ -298,11 +298,11 @@ else
   add_getdigits=0
   mk_rgx_block() {
     rgx=${rgx//\//\\/}
-    [ -z "$colors" ] && set_default_colors
+    [[ -z "$colors" ]] && set_default_colors
 
     local rep_start=''
     local rep_stop=''
-    if [ $again_mode = 1 ] ; then
+    if [[ $again_mode = 1 ]] ; then
       rep_start='do {'
       rep_stop='if (RSTART+RLENGTH == 1) break; $0 = substr($0, RSTART+RLENGTH); } while (match($0, /'"$rgx"'/, a))'
     fi
@@ -312,55 +312,55 @@ else
     local awk_pre_i_loop=''
 
     local set_normal=''
-    if [ $reset_normal_mode = 1 ] ; then
+    if [[ $reset_normal_mode = 1 ]] ; then
       esc_reset=''
       set_normal=';esc_reset="\x1B[" c "m"'
     fi
 
     local esc_eol=''
-    [ $reset_esc_mode_line = 1 ] && esc_eol=' esc_reset'
+    [[ $reset_esc_mode_line = 1 ]] && esc_eol=' esc_reset'
 
-    [ $reset_esc_mode = 1 ] && rep_start+='esc_reset="\x1B[0m";'
+    [[ $reset_esc_mode = 1 ]] && rep_start+='esc_reset="\x1B[0m";'
 
-    if [ $icol = 1 ] ; then
+    if [[ $icol = 1 ]] ; then
       rep_start+='c="'$s'"'$set_normal
       local a_i_color='"\x1B[" c "m" a[i]'$esc_reset
     else
       local a_i_color='colors'$icreg'['
-      if [ ! -z "$user_expr" ] ; then
+      if [[ ! -z "$user_expr" ]] ; then
         local uexpr='{r=int('"$user_expr"')
           return r<0?0:(r>=nb_colors'$icreg'?nb_colors'$icreg'-1:r)}'
         add_getdigits=1
-        if [ -z "$units" ] ; then
+        if [[ -z "$units" ]] ; then
           a_i_color+='uexpr'$ireg'('$getdigits'(a[i]), nb_colors'$icreg')'
           awk_funcs+='function uexpr'$ireg'(v,n)'$uexpr
         else
           a_i_color+='uexpr'$ireg'('$getdigits'(a[i]), '$s_i_unit', nb_colors'$icreg')'
           awk_funcs+='function uexpr'$ireg'(v,u,n)'$uexpr
         fi
-      elif [ ! -z "$user_scale_expr" ] ; then
+      elif [[ ! -z "$user_scale_expr" ]] ; then
         local v_compute='*nb_colors'$icreg'/(dscale'$ireg'*'${#units}')'
-        if [ -z "$units" ] ; then
+        if [[ -z "$units" ]] ; then
           a_i_color+='uexpr'$ireg'(a[i])'$v_compute
           awk_funcs+='function uexpr'$ireg'(v){return int('"$user_scale_expr"')}'
         else
           a_i_color+='uexpr'$ireg'(a[i], '$s_i_unit')'$v_compute
           awk_funcs+='function uexpr'$ireg'(v,u){return int('"$user_scale_expr"')}'
         fi
-      elif [ ! -z "$units" ] ; then
+      elif [[ ! -z "$units" ]] ; then
         local v_compute='*nb_colors'$icreg'/(dscale'$ireg'*'${#units}')'
         a_i_color+='get_icol'$ireg'(a[i]-'$min_scale', '$s_i_unit')'
         awk_funcs+='function get_icol'$ireg'(v,u){
           istart=nb_colors'$icreg'*(u==0?0:u-1)/'${#units}'
           return int(istart+(v'$v_compute'))}'
-      elif [ $scale_idx != 0 ] ; then
+      elif [[ $scale_idx != 0 ]] ; then
         add_getdigits=1
         a_i_color+='icol'
         awk_pre_i_loop+='icol=int(('$getdigits'(a['$scale_idx']) - '$min_scale')*nb_colors'$icreg'/dscale'$ireg')'
-      elif [ $scale_mode = 1 ] ; then
+      elif [[ $scale_mode = 1 ]] ; then
         add_getdigits=1
         a_i_color+='int(('$getdigits'(a[i]) - '$min_scale')*nb_colors'$icreg'/dscale'$ireg')'
-      elif [ $loop_color_mode = 1 ] ; then
+      elif [[ $loop_color_mode = 1 ]] ; then
         a_i_color+='icol++%nb_colors'$icreg
       else
         a_i_color+='ic%nb_colors'$icreg
@@ -368,7 +368,7 @@ else
         awk_ic_var2='ic=i-1;'
       fi
 
-      if [ -z "$set_normal" ]; then
+      if [[ -z "$set_normal" ]]; then
         a_i_color='"\x1B[" '$a_i_color\]$set_normal' "m" a[i]'$esc_reset
       else
         awk_ic_var1+='c='$a_i_color\]$set_normal
@@ -376,14 +376,14 @@ else
         a_i_color='"\x1B[" c "m" a[i]'$esc_reset
       fi
 
-      if [ $keep_color != 1 ] || [ $ireg = 0 ] ; then
+      if [[ $keep_color != 1 ]] || [[ $ireg = 0 ]] ; then
         awk_begin_script+="$colors"' nb_colors'$icreg'='$icol';'
       fi
     fi
-    [ $scale_mode = 1 ] && awk_begin_script+="dscale$ireg=$max_scale-$min_scale+1;"
+    [[ $scale_mode = 1 ]] && awk_begin_script+="dscale$ireg=$max_scale-$min_scale+1;"
 
     local filter_i=''
-    if [ ! -z "$awk_ignore_matches" ] ; then
+    if [[ ! -z "$awk_ignore_matches" ]] ; then
       IFS=$',= ' read -a awk_ignore_matches <<<$awk_ignore_matches
       for l in ${awk_ignore_matches[@]} ; do
         check_int "$l" "-i"
@@ -391,7 +391,7 @@ else
       done
     fi
 
-    [ $continue_mode = 0 ] && [ $ireg != 0 ] && awk_script+='else '
+    [[ $continue_mode = 0 ]] && [[ $ireg != 0 ]] && awk_script+='else '
     awk_script+='
     if (match($0, /'"$rgx"'/, a)) {
       '"$rep_start"'
@@ -427,16 +427,16 @@ else
     mk_rgx_block
     local pre_awk_script=''
     local post_awk_script=''
-    if [ $all_mode = 1 ] ; then
+    if [[ $all_mode = 1 ]] ; then
       pre_awk_script='len=length($0); do {'
       post_awk_script='previous_len=len;len=length($0) } while (previous_len != len);'
     fi
     local cmd
     add_awk_opt S
-    if [ $print_mode = 1 ]; then
+    if [[ $print_mode = 1 ]]; then
       cmd="print_awk"
       echo '#!/usr/bin/gawk '"$awk_opt"f
-      if [ -f /proc/$$/cmdline ]; then
+      if [[ -f /proc/$$/cmdline ]]; then
         cmdline=$(sed "s/'/'\\\\''/g;s/\\x00/' '/g" /proc/$$/cmdline)
         cmdline=${cmdline#* } # remove shell path
         cmdline=${cmdline#* } # remove colout path
@@ -450,7 +450,7 @@ else
     else
       cmd="exec awk $awk_opt"
     fi
-    [ $add_getdigits = 1 ] && awk_funcs+='function getdigits(s) { sub(/[^0-9]*/,"",s); return s}'
+    [[ $add_getdigits = 1 ]] && awk_funcs+='function getdigits(s) { sub(/[^0-9]*/,"",s); return s}'
     $cmd "$awk_funcs $awk_user_funcs"'
       BEGIN { '"$awk_user_variables;$awk_begin_script"' }
       { s="";'"$pre_awk_script $awk_script $post_awk_script"' print s $0 }'
@@ -558,7 +558,7 @@ cmd='38'
 prefix='fg'
 
 append_colors_name() {
-  while [ $# != 1 ] ; do
+  while (( $# != 1 )) ; do
     append "$s;${style_names[$prefix$1]}"
     shift
   done
@@ -566,7 +566,7 @@ append_colors_name() {
 }
 append_colors() {
   local scmd="$s;$cmd;"
-  while [ $# != 1 ] ; do
+  while (( $# != 1 )) ; do
     append "$scmd$1"
     shift
   done
@@ -598,16 +598,16 @@ set_default_colors() {
   append "37"
 }
 invalid_style() {
-  [ ! -z "${style_names[fg$style]}" ] &&
+  [[ ! -z "${style_names[fg$style]}" ]] &&
     echo "'$style' style on a background is probably a mistake." >&2 ||
     echo "Invalid '$style' color$extra." >&2
   exit 5
 }
 
-while [ $# != 0 ] ; do
+while (( $# != 0 )) ; do
   # re-parse: "-- [-rg] [--] PATTERN [COLORS_AND_STYLES...]]..."
-  if [ "$1" = '--' ] ; then
-    if [ $line_mode = 1 ] ; then
+  if [[ "$1" = '--' ]] ; then
+    if [[ $line_mode = 1 ]] ; then
       usage >&2
       exit 5
     fi
@@ -618,7 +618,7 @@ while [ $# != 0 ] ; do
     parse_cli "$@"
     shift $(($OPTIND-1))
 
-    if [ $# = 0 ] || [ $line_mode = 1 ] ; then
+    if (( $# == 0 )) || [[ $line_mode = 1 ]] ; then
       usage >&2
       exit 1
     fi
@@ -638,15 +638,15 @@ while [ $# != 0 ] ; do
 
   for style in "${styles[@]}" ; do
     # background selector
-    if [ bg = "$style" ] ; then
+    if [[ bg = "$style" ]] ; then
       cmd='48'
       prefix='bg'
     else
       v=${style_names[$prefix$style]}
-      if [ -z "$v" ] ; then
+      if [[ -z "$v" ]] ; then
         v2=${style_names[$prefix${style,,}]}
         # Bold and color
-        if [ ! -z "$v2" ] ; then
+        if [[ ! -z "$v2" ]] ; then
           s+=";$v2;1"
         # rgb888 hexadecimal color (#ffffff)
         elif [[ "$style" =~ ^'#'[0-9a-fA-F]{6}$ ]] ; then
@@ -664,10 +664,10 @@ while [ $# != 0 ] ; do
           s+=";$cmd;2;${style//\//;}"
         else
           mapcmd=${colormap_cmds[$style]}
-          if [ ! "$mapcmd" ] ; then
-            if [ "${style:0:2}" = 'r:' ]; then
+          if [[ ! "$mapcmd" ]] ; then
+            if [[ "${style:0:2}" = 'r:' ]]; then
               mapcmd=${colormap_cmds[${style:2}]}
-              [ ! "$mapcmd" ] && invalid_style
+              [[ ! "$mapcmd" ]] && invalid_style
 
               # reverse order colormap
               read ff comps <<<"$mapcmd"
