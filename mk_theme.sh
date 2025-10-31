@@ -1,6 +1,6 @@
-#!/bin/zsh
+#!/bin/bash
 
-if [ -z "$1" ]; then
+if [[ -z "$1" ]]; then
   echo $0 theme_name colout_param... >&2
   exit 1
 fi
