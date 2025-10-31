@@ -89,7 +89,6 @@ ln -s colout ~/bin
 - `#` followed by 3 or 6 hexadecimal values (true color mode)
 - `e` followed by a number from 0 to 15 (4-bits color mode)
 - `bg`
-- `+` followed by a style
 - Or a comma-separated list (or `=`) of those values.
 
 ### Styles

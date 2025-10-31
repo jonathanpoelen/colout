@@ -17,7 +17,6 @@ echo -ne "Add colors to a text stream in your terminal.\n\n"\
 "  - '#' followed by 3 or 6 hexadecimal values (true color mode)\n"\
 "  - 'e' followed by a number from 0 to 15 (4-bits color mode)\n"\
 "  - 'bg'\n"\
-"  - '+' followed by a style\n"\
 "  - Or a comma-separated list (or '=') of those values.\n"\
 "\n"\
 " -t [theme]  List or apply. (load '\${COLOUT_PREFIX_PATH:-\${0}_}\${theme}')\n\n"\
@@ -612,7 +611,7 @@ invalid_style() {
   if [[ ! -z "${style_names[fg$style]}" ]]; then
     echo "'$style' style on a background is probably a mistake." >&2
   else
-    echo "Invalid '$style' style." >&2
+    echo "Invalid '$style' style or color." >&2
   fi
   exit 5
 }
@@ -642,11 +641,7 @@ while (( $# != 0 )) ; do
   fi
 
   # note: "bg,red" is equivalent to "bg=red"
-  if [[ "$1" =~ ^'+' ]]; then
-    IFS=$',= ' read -a styles <<<${1:1}
-  else
-    IFS=$',= ' read -a styles <<<$1
-  fi
+  IFS=$',= ' read -a styles <<<$1
   s=''
 
   for style in "${styles[@]}" ; do
@@ -703,9 +698,6 @@ while (( $# != 0 )) ; do
       prefix='fg'
     fi
   done
-  if [[ "$1" =~ ^'+' ]] ; then
-    s="${s:1}"
-  fi
   append "$s"
   shift
 done
