@@ -468,8 +468,8 @@ declare -A style_names=(
 
   [fgU]=21 [fgdu]=21 [fgdouble_u]=21 [fgd_underline]=21 [fgdunderline]=21 [fgdouble_underline]=21
 
-  [fgrr]='22;23;24;25;26;27;28'
-  [fgreset]='22;23;24;25;26;27;28'
+  [fgrr]='22;23;24;25;27;28'
+  [fgreset]='22;23;24;25;27;28'
 
   [fgro]=22         [fgrd]=22        [fgri]=23           [fgru]=24
   [fgrbold]=22      [fgrdim]=22      [fgritalic]=23      [fgrunderline]=24
