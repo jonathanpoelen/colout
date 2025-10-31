@@ -2,7 +2,7 @@
 
 # Colout -- Add colors to a text stream in your terminal
 
-Inspired by http://nojhan.github.com/colout/
+Inspired by https://nojhan.github.io/colout/
 
 This repo a bash script (`colout`) and a few predefined themes (`colout_*`).
 
