@@ -472,7 +472,7 @@ declare -A style_names=(
   [fgreset]='22;23;24;25;26;27;28'
 
   [fgro]=22         [fgrd]=22        [fgri]=23           [fgru]=24
-  [fgreset_bold]=22      [fgrdim]=22      [fgritalic]=23      [fgrunderline]=24
+  [fgrbold]=22      [fgrdim]=22      [fgritalic]=23      [fgrunderline]=24
   [fgreset_bold]=22 [fgreset_dim]=22 [fgreset_italic]=23 [fgreset_underline]=24
 
   [fgrl]=25          [fgrv]=27            [fgrh]=28
