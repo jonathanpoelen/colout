@@ -14,6 +14,8 @@ This repo a bash script (`colout`) and a few predefined themes (`colout_*`).
 
 `colout` -l [COLORS_AND_STYLES...]
 
+`colout [OPTIONS] PATTERN [COLORS_AND_STYLES...] [-- [OPTIONS] PATTERN [COLORS_AND_STYLES...] [-- ...]]
+
 `colout` [-rcankRCeENpo] [-i group_indexes] [-s scale] [-S group_index] [-I group_index] [-u units] [-x awk_expr] [-X awk_expr] [-y awk_expr] [-Y awk_expr] [-f awk_func] [-v awk_variable] PATTERN [COLORS_AND_STYLES...] [-- ...]
 
 
@@ -82,10 +84,10 @@ ln -s colout ~/bin
 - A style name
 - A color name
 - A colormap name
-- A number from 0 to 255
-- A triplet from 0 and 255 separated by `/`
-- `e` followed by a number from 0 to 15
-- `#` followed by 3 or 6 hexadecimal values
+- A number from 0 to 255 (256-color mode)
+- A triplet from 0 and 255 separated by `/` (true color mode)
+- `#` followed by 3 or 6 hexadecimal values (true color mode)
+- `e` followed by a number from 0 to 15 (4-bits color mode)
 - `bg`
 - `+` followed by a style
 - Or a comma-separated list (or `=`) of those values.

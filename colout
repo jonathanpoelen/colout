@@ -5,16 +5,17 @@ echo -ne "Add colors to a text stream in your terminal.\n\n"\
 "colout -h\n"\
 "colout -t [theme]\n"\
 "colout -l [COLORS_AND_STYLES...]\n"\
+"colout [OPTIONS] PATTERN [COLORS_AND_STYLES...] [-- [OPTIONS] PATTERN [COLORS_AND_STYLES...] [-- ...]]\n"\
 "colout [-rcankRCeENpo] [-i group_indexes] [-s scale] [-S group_index] [-I group_index] [-u units] [-x awk_expr] [-X awk_expr] [-y awk_expr] [-Y awk_expr] [-f awk_func] [-v awk_variable] PATTERN [COLORS_AND_STYLES...] [-- ...]\n\n"\
 "PATTERN\n  Awk pattern expression.\n\n"\
 "COLORS_AND_STYLES\n"\
 "  - A style name\n"\
 "  - A color name\n"\
 "  - A colormap name\n"\
-"  - A number from 0 to 255\n"\
-"  - A triplet from 0 and 255 separated by /\n"\
-"  - 'e' followed by a number from 0 to 15\n"\
-"  - '#' followed by 3 or 6 hexadecimal values\n"\
+"  - A number from 0 to 255 (256-color mode)\n"\
+"  - A triplet from 0 and 255 separated by '/' (true color mode)\n"\
+"  - '#' followed by 3 or 6 hexadecimal values (true color mode)\n"\
+"  - 'e' followed by a number from 0 to 15 (4-bits color mode)\n"\
 "  - 'bg'\n"\
 "  - '+' followed by a style\n"\
 "  - Or a comma-separated list (or '=') of those values.\n"\
