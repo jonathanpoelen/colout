@@ -102,6 +102,7 @@ ln -s colout ~/bin
 - `d[im]`
 - `i[talic]`
 - `u[nderline]`
+- `d[ouble_]u[nderline],U`
 - `blink`,`l`
 - `reverse`,`v`
 - `h[idden]`
@@ -110,6 +111,7 @@ ln -s colout ~/bin
 - `r[eset_]d[im]`
 - `r[eset_]i[talic]`
 - `r[eset_]u[nderline]`
+- `r[eset_]d[ouble_]u[nderline]`,`rU`
 - `r[eset_]blink`,`rl`
 - `r[eset_]reverse`,`rv`
 - `r[eset_]h[idden]`
