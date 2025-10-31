@@ -608,9 +608,11 @@ set_default_colors() {
   append "37"
 }
 invalid_style() {
-  [[ ! -z "${style_names[fg$style]}" ]] &&
-    echo "'$style' style on a background is probably a mistake." >&2 ||
-    echo "Invalid '$style' color$extra." >&2
+  if [[ ! -z "${style_names[fg$style]}" ]]; then
+    echo "'$style' style on a background is probably a mistake." >&2
+  else
+    echo "Invalid '$style' style." >&2
+  fi
   exit 5
 }
 
