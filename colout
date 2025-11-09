@@ -247,7 +247,7 @@ parse_cli () {
         echo "Option -$OPTARG requires an argument." >&2
         exit 1
         ;;
-      h) usage ; exit 1 ;;
+      h) usage ; exit 0 ;;
     esac
   done
 
